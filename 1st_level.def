@@ -20,9 +20,20 @@ From: ubuntu:20.04
     . /opt/venv/bin/activate
     pip install --upgrade pip
     pip install bids-validator nipype fslpy numpy pandas
+    pip3 install \
+        bids-validator \
+        nipype \
+        niworkflows \
+        pandas \
+        numpy \
+        scikit-learn \
+        scipy \
+        matplotlib
 
     # Ensure FSL is properly sourced
     source /environment
+
+    mkdir -p /app
 
 %environment
     export PATH=/opt/venv/bin:$PATH

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=fmri_analysis
+#SBATCH --job-name=1st_level
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=04:00:00
@@ -10,8 +10,8 @@
 module load apptainer
 
 # Define paths
-BIDS_DIR="/path/to/bids/dataset"
-CONTAINER_IMAGE="/path/to/fmri_analysis.sif"
+BIDS_DIR="/gscratch/fang/narsad"
+CONTAINER_IMAGE="/mmfs1/home/xxqian/repos/hyak_narsad/1st_level.sif"
 
 # Get subjects using Apptainer
 SUBJECTS=$(apptainer exec --bind $BIDS_DIR:/data $CONTAINER_IMAGE python3 /app/get_subjects.py)
