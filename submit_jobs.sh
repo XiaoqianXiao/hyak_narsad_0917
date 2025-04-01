@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#SBATCH --job-name=fmri_analysis
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/%x_%j.out
+#SBATCH --error=logs/%x_%j.err
+
+module load apptainer
+
+# Define paths
+BIDS_DIR="/path/to/bids/dataset"
+CONTAINER_IMAGE="/path/to/fmri_analysis.sif"
+
+# Get subjects using Apptainer
+SUBJECTS=$(apptainer exec --bind $BIDS_DIR:/data $CONTAINER_IMAGE python3 /app/get_subjects.py)
+
+# Submit a job for each subject
+for subj in $SUBJECTS; do
+    sbatch <<EOT
+#!/bin/bash
+#SBATCH --job-name=fmri_${subj}
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/fmri_${subj}_%j.out
+#SBATCH --error=logs/fmri_${subj}_%j.err
+
+module load apptainer
+apptainer run --bind $BIDS_DIR:/data $CONTAINER_IMAGE $subj
+EOT
+done
