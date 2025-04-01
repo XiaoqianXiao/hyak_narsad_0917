@@ -42,7 +42,7 @@ From: ubuntu:20.04
 
 %files
     utils.py /app/utils.py
-    workflow.py /app/workflows.py
+    workflows.py /app/workflows.py
     run_1st_level.py /app/run_1st_level.py
     get_subjects.py /app/get_subjects.py
 
