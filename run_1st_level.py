@@ -39,6 +39,7 @@ bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
 fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data/behav')
+scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
 
 # Define the list of tasks to process
 tasks = ['phase2', 'phase3']
@@ -46,7 +47,7 @@ tasks = ['phase2', 'phase3']
 # Loop through each task and process the corresponding data
 for task in tasks:
     # Create directories for work and output if they do not exist
-    work_dir = os.path.join(derivatives_dir, f'work_flows/firstLevel/{task}')
+    work_dir = os.path.join(scrubbed_dir, f'work_flows/firstLevel/{task}')
     os.makedirs(work_dir, exist_ok=True)
     output_dir = os.path.join(derivatives_dir, 'fMRI_analysis')
     os.makedirs(output_dir, exist_ok=True)
