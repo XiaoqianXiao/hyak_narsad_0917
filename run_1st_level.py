@@ -33,8 +33,8 @@ plugin_settings = {
 
 # Define directories
 root_dir = '/data'  # Path to the BIDS directory inside the container
-project_name = 'NARSAD'
-data_dir = os.path.join(root_dir, project_name, 'MRI')
+#project_name = 'NARSAD'
+data_dir = os.path.join(root_dir, 'MRI')
 bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
 fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
