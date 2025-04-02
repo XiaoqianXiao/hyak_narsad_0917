@@ -14,10 +14,10 @@ module load apptainer
 BIDS_DIR="/gscratch/fang/narsad"
 CONTAINER_IMAGE="/mmfs1/home/xxqian/repos/apptainers/1st_level.sif"
 
-# Get subjects using Apptainer
-#SUBJECTS=$(apptainer exec --bind $BIDS_DIR:/data $CONTAINER_IMAGE python3 /app/get_subjects.py)
+# Get subjects dynamically
+# SUBJECTS=$(apptainer exec --bind $BIDS_DIR:/data $CONTAINER_IMAGE python3 /app/get_subjects.py)
 SUBJECTS='N101'
-# Submit a job for each subject
+
 for subj in $SUBJECTS; do
     sbatch <<EOT
 #!/bin/bash
@@ -30,6 +30,6 @@ for subj in $SUBJECTS; do
 #SBATCH --error=logs/fmri_${subj}_%j.err
 
 module load apptainer
-apptainer run --bind $BIDS_DIR:/data $CONTAINER_IMAGE $subj
+apptainer run --bind $BIDS_DIR:/data $CONTAINER_IMAGE --subject $subj
 EOT
 done
