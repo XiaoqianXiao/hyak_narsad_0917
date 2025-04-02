@@ -12,6 +12,7 @@ for subj in $SUBJECTS; do
     sbatch <<EOT
 
 #SBATCH --job-name=fmri_${subj}
+#SBATCH --account=fang
 #SBATCH --partition=ckpt
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
