@@ -1,4 +1,12 @@
 #!/bin/bash
+#SBATCH --job-name=log_${subj}
+#SBATCH --account=fang
+#SBATCH --partition=ckpt
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=16G
+#SBATCH --time=04:00:00
+#SBATCH --output=logs/log_${subj}_%j.out
+#SBATCH --error=logs/log_${subj}_%j.err
 
 module load apptainer
 
