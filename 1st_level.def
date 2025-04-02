@@ -35,7 +35,8 @@ From: ubuntu:20.04
         matplotlib
 
     # Ensure FSL is properly sourced
-    source /environment
+    exec /bin/bash
+    . /environment
 
     mkdir -p /app
 
