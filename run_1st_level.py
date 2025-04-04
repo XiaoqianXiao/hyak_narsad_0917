@@ -1,111 +1,167 @@
+#%%
 import os
 import json
-import argparse
-import logging
-from pathlib import Path
 from bids.layout import BIDSLayout
-from nipype.pipeline import engine as pe
-from nipype.algorithms.modelgen import SpecifyModel
-from nipype.interfaces import fsl, utility as niu, io as nio
-from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
-from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design
-import numpy as np
+from templateflow.api import get as tpl_get, templates as get_tpl_list
 import pandas as pd
-from nipype.interfaces.base.support import Bunch
-from workflows import first_level_wf
+import nipype.pipeline.engine as pe
+import nipype.interfaces.utility as niu
+import subprocess
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-# Parse the subject ID argument from the command line
-parser = argparse.ArgumentParser(description="Run first-level fMRI analysis.")
-parser.add_argument('--subject', required=True, help="Subject ID (e.g., sub-01, sub-02, etc.)")
-args = parser.parse_args()
-
-# Set up environment variables for FSL
+# Set FSL environment variables for the container
 os.environ['FSLOUTPUTTYPE'] = 'NIFTI_GZ'
-os.environ['FSLDIR'] = '/usr/local/fsl'  # Adjust this if necessary
+os.environ['FSLDIR'] = '/usr/local/fsl'  # Matches the Docker image
 os.environ['PATH'] += os.pathsep + os.path.join(os.environ['FSLDIR'], 'bin')
 
-# Define directories
-root_dir = '/data'
-data_dir = os.path.join(root_dir, 'MRI')
+# Nipype plugin settings for local execution
+plugin_settings = {
+    'plugin': 'MultiProc',
+    'plugin_args': {
+        'n_procs': 4,
+        'raise_insufficient': False,
+        'maxtasksperchild': 1,
+    }
+}
+
+# Use environment variables for data paths
+root_dir = os.getenv('DATA_DIR', '/data')  # Default to /data if not set
+project_name = 'NARSAD'
+data_dir = os.path.join(root_dir, project_name, 'MRI')
 bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
 fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data/behav')
 scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
 
-# Tasks
-tasks = ['phase2', 'phase3']
-
-logger.info(f"Processing subject: {args.subject}")
-
-# Loop through tasks
-for task in tasks:
-    work_dir = os.path.join(scrubbed_dir, f'work_flows/firstLevel/{task}')
-    output_dir = os.path.join(derivatives_dir, 'fMRI_analysis')
+# Workflow and output directories
+participant_label = []  # Can be set via args or env if needed
+run = []
+task = ['phase3']
+work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
+if not os.path.exists(work_dir):
     os.makedirs(work_dir, exist_ok=True)
+output_dir = os.path.join(derivatives_dir, 'fMRI_analysis')
+if not os.path.exists(output_dir):
     os.makedirs(output_dir, exist_ok=True)
+space = ['MNI152NLin2009cAsym']
 
-    # BIDS Layout
-    try:
-        layout = BIDSLayout(bids_dir, validate=False, derivatives=derivatives_dir)
-    except Exception as e:
-        logger.error(f"Error loading BIDS Layout: {e}")
-        exit(1)
+# Initialize BIDS layout
+layout = BIDSLayout(str(bids_dir), validate=False, derivatives=str(derivatives_dir))
+subjects = layout.get(target='subject', return_type='id')
+sessions = layout.get(target='session', return_type='id')
+runs = layout.get(target='run', return_type='id')
 
-    query = {
-        'desc': 'preproc',
-        'suffix': 'bold',
-        'extension': ['.nii', '.nii.gz'],
-        'subject': args.subject,
-        'task': task,
-    }
+# Query for preprocessed BOLD files
+query = {
+    'desc': 'preproc',
+    'suffix': 'bold',
+    'extension': ['.nii', '.nii.gz']
+}
+if participant_label:
+    query['subject'] = '|'.join(participant_label)
+if run:
+    query['run'] = '|'.join(run)
+if task:
+    query['task'] = '|'.join(task)
+if space:
+    query['space'] = '|'.join(space)
+prepped_bold = layout.get(**query)
+if not prepped_bold:
+    print(f'No preprocessed files found under: {derivatives_dir}.')
+    exit(1)
+entities = prepped_bold[0].entities
 
-    prepped_bold = layout.get(**query)
+# Function to generate Slurm script for a subject
+def create_slurm_script(sub, inputs, work_dir, output_dir):
+    slurm_script = f"""#!/bin/bash
+#SBATCH --job-name=first_level_sub_{sub}
+#SBATCH --account=<your-account>  # Replace with your Hyak account
+#SBATCH --partition=compute
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=4
+#SBATCH --mem=20G
+#SBATCH --time=4:00:00
+#SBATCH --output={work_dir}/sub_{sub}_%j.out
+#SBATCH --error={work_dir}/sub_{sub}_%j.err
 
-    if not prepped_bold:
-        logger.warning(f'No preprocessed files found for subject {args.subject}, task {task}.')
-        continue
+module load apptainer
+apptainer exec -B {root_dir}:/data narsad-fmri_1.0.sif python3 /app/run_1st_level.py --subject {sub}
+"""
+    script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
+    with open(script_path, 'w') as f:
+        f.write(slurm_script)
+    return script_path
 
-    for part in prepped_bold:
-        logger.info(f"Processing: {part.path}")
+# Function to run workflow for a single subject
+def run_subject_workflow(sub, inputs, work_dir, output_dir):
+    from workflows import first_level_wf  # Assumes workflows.py is in /app
+    workflow = first_level_wf(inputs, output_dir)
+    workflow.base_dir = os.path.join(work_dir, f'sub_{sub}')
+    workflow.run(**plugin_settings)
 
-        entities = part.entities
-        sub = entities['subject']
-        task = entities['task']
+# Main execution
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Run first-level fMRI analysis.")
+    parser.add_argument('--subject', type=str, help="Specific subject ID to process")
+    args = parser.parse_args()
 
-        if sub == 'N202' and task == 'phase3':
-            events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
-        else:
-            events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
-
-        try:
-            mask = layout.get(
-                suffix='mask', return_type='file', extension=['.nii', '.nii.gz'], space='MNI152NLin2009cAsym',
-                subject=sub, task=task
-            )[0]
-            regressors = layout.get(
-                desc='confounds', return_type='file', extension=['.tsv'], subject=sub, task=task
-            )[0]
-        except IndexError as e:
-            logger.error(f"Missing mask or confound file for subject {sub}, task {task}. {e}")
-            continue
-
-        inputs = {
-            sub: {
-                'bold': part.path,
-                'mask': mask,
-                'regressors': regressors,
-                'tr': entities.get('RepetitionTime'),
-                'events': events_file,
-            }
-        }
-
-        workflow = first_level_wf(inputs, output_dir)
-        workflow.base_dir = os.path.join(work_dir, f'sub_{sub}')
-        workflow.run(plugin='MultiProc', plugin_args={'n_procs': 4})
-
-    logger.info(f"Subject {args.subject}, task {task} completed.")
+    if args.subject:  # Run for a single subject (called by Slurm job or manually)
+        found = False
+        for part in prepped_bold:
+            if part.entities['subject'] == args.subject:
+                found = True
+                entities = part.entities
+                sub = entities['subject']
+                task = entities['task']
+                # Set events file based on subject and task
+                if sub == 'N202' and task == 'phase3':
+                    events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
+                else:
+                    events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+                # Prepare inputs dictionary
+                inputs = {sub: {}}
+                base = {'subject', 'task'}.intersection(entities)
+                subquery = {k: v for k, v in entities.items() if k in base}
+                inputs[sub]['bold'] = part.path
+                try:
+                    inputs[sub]['mask'] = layout.get(suffix='mask', return_type='file',
+                                                    extension=['.nii', '.nii.gz'],
+                                                    space=query['space'], **subquery)[0]
+                    inputs[sub]['regressors'] = layout.get(desc='confounds', return_type='file',
+                                                          extension=['.tsv'], **subquery)[0]
+                except IndexError as e:
+                    print(f"Error: Missing required file (mask or regressors) for subject {sub}")
+                    exit(1)
+                inputs[sub]['tr'] = entities['RepetitionTime']
+                inputs[sub]['events'] = events_file
+                print(f"Running first-level analysis for subject {sub}")
+                run_subject_workflow(sub, inputs, work_dir, output_dir)
+                break
+        if not found:
+            print(f"Error: Subject {args.subject} not found in preprocessed BOLD files")
+            exit(1)
+    else:  # Submit Slurm jobs for all subjects
+        for part in prepped_bold:
+            entities = part.entities
+            sub = entities['subject']
+            task = entities['task']
+            if sub == 'N202' and task == 'phase3':
+                events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
+            else:
+                events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+            inputs = {sub: {}}
+            base = {'subject', 'task'}.intersection(entities)
+            subquery = {k: v for k, v in entities.items() if k in base}
+            inputs[sub]['bold'] = part.path
+            inputs[sub]['mask'] = layout.get(suffix='mask', return_type='file',
+                                            extension=['.nii', '.nii.gz'],
+                                            space=query['space'], **subquery)[0]
+            inputs[sub]['regressors'] = layout.get(desc='confounds', return_type='file',
+                                                  extension=['.tsv'], **subquery)[0]
+            inputs[sub]['tr'] = entities['RepetitionTime']
+            inputs[sub]['events'] = events_file
+            # Generate and submit Slurm job
+            script_path = create_slurm_script(sub, inputs, work_dir, output_dir)
+            subprocess.run(['sbatch', script_path], check=True)
+            print(f"Submitted Slurm job for subject {sub}")
