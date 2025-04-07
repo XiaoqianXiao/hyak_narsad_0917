@@ -34,6 +34,7 @@ From: ubuntu:20.04
     rm fsl-6.0.4-centos6_64.tar.gz
 
     # Install Python dependencies
+    mknod -m 666 /dev/null c 1 3 || true
     pip3 install --upgrade pip
     pip3 install \
         bids \

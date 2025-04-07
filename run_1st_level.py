@@ -31,8 +31,8 @@ bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
 fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data/behav')
-scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
-
+#scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
+scrubbed_dir = '/scrubbed_dir'
 # Workflow and output directories
 participant_label = []  # Can be set via args or env if needed
 run = []
