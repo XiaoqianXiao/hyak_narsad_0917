@@ -59,8 +59,8 @@ if participant_label:
     query['subject'] = '|'.join(participant_label)
 if run:
     query['run'] = '|'.join(run)
-if task:
-    query['task'] = '|'.join(task)
+#if task:
+#    query['task'] = '|'.join(task)
 if space:
     query['space'] = '|'.join(space)
 prepped_bold = layout.get(**query)
