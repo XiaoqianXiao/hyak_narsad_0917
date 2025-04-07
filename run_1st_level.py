@@ -112,7 +112,7 @@ if __name__ == "__main__":
                 entities = part.entities
                 sub = entities['subject']
                 task = entities['task']
-                work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
+                work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task}')
                 if not os.path.exists(work_dir):
                     os.makedirs(work_dir, exist_ok=True)
                 # Set events file based on subject and task
@@ -147,7 +147,7 @@ if __name__ == "__main__":
             entities = part.entities
             sub = entities['subject']
             task = entities['task']
-            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
+            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task}')
             if not os.path.exists(work_dir):
                 os.makedirs(work_dir, exist_ok=True)
             if sub == 'N202' and task == 'phase3':
