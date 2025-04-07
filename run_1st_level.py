@@ -36,10 +36,8 @@ scrubbed_dir = '/scrubbed_dir'
 # Workflow and output directories
 participant_label = []  # Can be set via args or env if needed
 run = []
-task = ['phase3']
-work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
-if not os.path.exists(work_dir):
-    os.makedirs(work_dir, exist_ok=True)
+#task = ['phase3']
+
 output_dir = os.path.join(derivatives_dir, 'fMRI_analysis')
 if not os.path.exists(output_dir):
     os.makedirs(output_dir, exist_ok=True)
@@ -114,6 +112,9 @@ if __name__ == "__main__":
                 entities = part.entities
                 sub = entities['subject']
                 task = entities['task']
+                work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
+                if not os.path.exists(work_dir):
+                    os.makedirs(work_dir, exist_ok=True)
                 # Set events file based on subject and task
                 if sub == 'N202' and task == 'phase3':
                     events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
@@ -146,6 +147,9 @@ if __name__ == "__main__":
             entities = part.entities
             sub = entities['subject']
             task = entities['task']
+            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task[0]}')
+            if not os.path.exists(work_dir):
+                os.makedirs(work_dir, exist_ok=True)
             if sub == 'N202' and task == 'phase3':
                 events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
             else:
