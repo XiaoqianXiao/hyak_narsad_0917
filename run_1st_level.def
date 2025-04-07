@@ -41,7 +41,8 @@ From: ubuntu:20.04
         nipype \
         pandas \
         templateflow \
-        numpy
+        numpy \
+        niworkflows
 
 %files
     run_1st_level.py /app/run_1st_level.py
