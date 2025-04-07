@@ -47,6 +47,7 @@ From: ubuntu:20.04
 %files
     run_1st_level.py /app/run_1st_level.py
     workflows.py /app/workflows.py
+    utils.py /app/utils.py
 
 %post
     chmod +x /app/run_1st_level.py
