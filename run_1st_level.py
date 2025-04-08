@@ -70,7 +70,7 @@ if not prepped_bold:
 entities = prepped_bold[0].entities
 
 # Function to generate Slurm script for a subject
-def create_slurm_script(sub, inputs, work_dir, output_dir):
+def create_slurm_script(sub, inputs, work_dir, output_dir, task):
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=first_level_sub_{sub}
 #SBATCH --account=<your-account>  # Replace with your Hyak account
@@ -83,12 +83,14 @@ def create_slurm_script(sub, inputs, work_dir, output_dir):
 #SBATCH --error={work_dir}/sub_{sub}_%j.err
 
 module load apptainer
-apptainer exec -B {root_dir}:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif python3 /app/run_1st_level.py --subject --subject {sub}
+apptainer exec -B {root_dir}:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif \\
+    python3 /app/run_1st_level.py --subject {sub} --task {task}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
     with open(script_path, 'w') as f:
         f.write(slurm_script)
     return script_path
+
 
 # Function to run workflow for a single subject
 def run_subject_workflow(sub, inputs, work_dir, output_dir):
@@ -98,75 +100,80 @@ def run_subject_workflow(sub, inputs, work_dir, output_dir):
     workflow.run(**plugin_settings)
 
 # Main execution
+# ...
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Run first-level fMRI analysis.")
     parser.add_argument('--subject', type=str, help="Specific subject ID to process")
+    parser.add_argument('--task', type=str, help="Specific task to process (e.g., phase2, phase3)")
     args = parser.parse_args()
 
-    if args.subject:  # Run for a single subject (called by Slurm job or manually)
+    if args.task:
+        task = [args.task]  # overwrite task filter
+        query['task'] = args.task
+
+    if args.subject:  # Run for a single subject
         found = False
-        for part in prepped_bold:
-            if part.entities['subject'] == args.subject:
+        for part in layout.get(invalid_filters='allow', **query):
+            if part.entities['subject'] == args.subject and (not args.task or part.entities['task'] == args.task):
                 found = True
                 entities = part.entities
                 sub = entities['subject']
                 task = entities['task']
                 work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task}')
-                if not os.path.exists(work_dir):
-                    os.makedirs(work_dir, exist_ok=True)
-                # Set events file based on subject and task
+                os.makedirs(work_dir, exist_ok=True)
+
+                # Set events file
                 if sub == 'N202' and task == 'phase3':
                     events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
                 else:
                     events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
-                # Prepare inputs dictionary
+
                 inputs = {sub: {}}
                 base = {'subject', 'task'}.intersection(entities)
                 subquery = {k: v for k, v in entities.items() if k in base}
                 inputs[sub]['bold'] = part.path
                 try:
                     inputs[sub]['mask'] = layout.get(suffix='mask', return_type='file',
-                                                    extension=['.nii', '.nii.gz'],
-                                                    space=query['space'], **subquery)[0]
+                                                     extension=['.nii', '.nii.gz'],
+                                                     space=query['space'], **subquery)[0]
                     inputs[sub]['regressors'] = layout.get(desc='confounds', return_type='file',
-                                                          extension=['.tsv'], **subquery)[0]
-                except IndexError as e:
+                                                           extension=['.tsv'], **subquery)[0]
+                except IndexError:
                     print(f"Error: Missing required file (mask or regressors) for subject {sub}")
                     exit(1)
                 inputs[sub]['tr'] = entities['RepetitionTime']
                 inputs[sub]['events'] = events_file
-                print(f"Running first-level analysis for subject {sub}")
+                print(f"Running first-level analysis for subject {sub}, task {task}")
                 run_subject_workflow(sub, inputs, work_dir, output_dir)
                 break
         if not found:
-            print(f"Error: Subject {args.subject} not found in preprocessed BOLD files")
+            print(f"Error: Subject {args.subject} with task {args.task} not found in preprocessed BOLD files")
             exit(1)
-    else:  # Submit Slurm jobs for all subjects
-        for part in prepped_bold:
+    else:
+        for part in layout.get(invalid_filters='allow', **query):
             entities = part.entities
             sub = entities['subject']
             task = entities['task']
             work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/firstLevel/{task}')
-            if not os.path.exists(work_dir):
-                os.makedirs(work_dir, exist_ok=True)
+            os.makedirs(work_dir, exist_ok=True)
+
             if sub == 'N202' and task == 'phase3':
                 events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
             else:
                 events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+
             inputs = {sub: {}}
             base = {'subject', 'task'}.intersection(entities)
             subquery = {k: v for k, v in entities.items() if k in base}
             inputs[sub]['bold'] = part.path
             inputs[sub]['mask'] = layout.get(suffix='mask', return_type='file',
-                                            extension=['.nii', '.nii.gz'],
-                                            space=query['space'], **subquery)[0]
+                                             extension=['.nii', '.nii.gz'],
+                                             space=query['space'], **subquery)[0]
             inputs[sub]['regressors'] = layout.get(desc='confounds', return_type='file',
-                                                  extension=['.tsv'], **subquery)[0]
+                                                   extension=['.tsv'], **subquery)[0]
             inputs[sub]['tr'] = entities['RepetitionTime']
             inputs[sub]['events'] = events_file
-            # Generate and submit Slurm job
-            script_path = create_slurm_script(sub, inputs, work_dir, output_dir)
+
+            script_path = create_slurm_script(sub, inputs, work_dir, output_dir, task)
             print(f"Slurm script created at: {script_path}")
-            #subprocess.run(['sbatch', script_path], check=True)
-            #print(f"Submitted Slurm job for subject {sub}")
