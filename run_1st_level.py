@@ -83,7 +83,7 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task):
 #SBATCH --error={work_dir}/sub_{sub}_%j.err
 
 module load apptainer
-apptainer exec -B {root_dir}:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif \\
     python3 /app/run_1st_level.py --subject {sub} --task {task}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
