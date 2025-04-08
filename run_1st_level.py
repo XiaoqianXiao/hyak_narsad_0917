@@ -60,7 +60,7 @@ if participant_label:
 if run:
     query['run'] = '|'.join(run)
 #if task:
-#    query['task'] = '|'.join(task)
+#    query['task'] = '|'.join(task)；
 if space:
     query['space'] = '|'.join(space)
 prepped_bold = layout.get(**query)
@@ -83,7 +83,7 @@ def create_slurm_script(sub, inputs, work_dir, output_dir):
 #SBATCH --error={work_dir}/sub_{sub}_%j.err
 
 module load apptainer
-apptainer exec -B {root_dir}:/data narsad-fmri_1.0.sif python3 /app/run_1st_level.py --subject {sub}
+apptainer exec -B {root_dir}:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif python3 /app/run_1st_level.py --subject --subject {sub}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
     with open(script_path, 'w') as f:
@@ -167,5 +167,6 @@ if __name__ == "__main__":
             inputs[sub]['events'] = events_file
             # Generate and submit Slurm job
             script_path = create_slurm_script(sub, inputs, work_dir, output_dir)
-            subprocess.run(['sbatch', script_path], check=True)
-            print(f"Submitted Slurm job for subject {sub}")
+            print(f"Slurm script created at: {script_path}")
+            #subprocess.run(['sbatch', script_path], check=True)
+            #print(f"Submitted Slurm job for subject {sub}")
