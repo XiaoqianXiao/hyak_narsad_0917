@@ -33,6 +33,7 @@ fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data/behav')
 #scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
 scrubbed_dir = '/scrubbed_dir'
+container_path = os.path.join(scrubbed_dir,"images/narsad-fmri_1st_level_1.0.sif")
 # Workflow and output directories
 participant_label = []  # Can be set via args or env if needed
 run = []
@@ -70,7 +71,7 @@ if not prepped_bold:
 entities = prepped_bold[0].entities
 
 # Function to generate Slurm script for a subject
-def create_slurm_script(sub, inputs, work_dir, output_dir, task):
+def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path):
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=first_level_sub_{sub}
 #SBATCH --account=fang
@@ -83,7 +84,7 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task):
 #SBATCH --error={work_dir}/sub_{sub}_%j.err
 
 module load apptainer
-apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir narsad-fmri_1st_level_1.0.sif \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir container_path \\
     python3 /app/run_1st_level.py --subject {sub} --task {task}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
@@ -175,5 +176,5 @@ if __name__ == "__main__":
             inputs[sub]['tr'] = entities['RepetitionTime']
             inputs[sub]['events'] = events_file
 
-            script_path = create_slurm_script(sub, inputs, work_dir, output_dir, task)
+            script_path = create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
             print(f"Slurm script created at: {script_path}")
