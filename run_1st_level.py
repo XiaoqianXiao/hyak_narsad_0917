@@ -80,8 +80,9 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem=20G
 #SBATCH --time=3:00:00
-#SBATCH --output={work_dir}/sub_{sub}_%j.out
-#SBATCH --error={work_dir}/sub_{sub}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel/phase{task}/sub_{sub}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel/phase{task}/sub_{sub}_%j.err
+
 
 module load apptainer
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {container_path} \\

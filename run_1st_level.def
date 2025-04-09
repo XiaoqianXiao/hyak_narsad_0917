@@ -1,34 +1,31 @@
 Bootstrap: docker
-From: nipreps/fsl:6.0.4
+From: neurodebian:stretch-non-free
 
 %environment
-    export FSLDIR=/opt/fsl
+    export FSLDIR=/usr/share/fsl/6.0
     export PATH=$FSLDIR/bin:$PATH
     export FSLOUTPUTTYPE=NIFTI_GZ
     export DEBIAN_FRONTEND=noninteractive
 
 %post
     export DEBIAN_FRONTEND=noninteractive
-    unset LD_LIBRARY_PATH  # Prevent libc upgrade issues
+    unset LD_LIBRARY_PATH  # prevent libc upgrade issues
 
-    # Install pip3 and dependencies
+    # Add NeuroDebian keyring
+    apt-get update && apt-get install -y --no-install-recommends neurodebian-keyring
+
+    # Install FSL and pip dependencies
     apt-get update && apt-get install -y --no-install-recommends \
-        python3-pip \
-        python3-dev \
-        git \
-        bzip2 \
-        libglib2.0-0 \
-        libxext6 \
-        libsm6 \
-        libxrender1 \
-        pkg-config \
-        libhdf5-dev \
-        ca-certificates \
-        && apt-get clean && rm -rf /var/lib/apt/lists/*
+        fsl-core fsl-atlases fsl-doc-6.0 fslview \
+        python3 python3-pip python3-dev \
+        git bzip2 \
+        libglib2.0-0 libxext6 libsm6 libxrender1 \
+        pkg-config libhdf5-dev ca-certificates && \
+        apt-get clean && rm -rf /var/lib/apt/lists/*
 
     # Confirm pip3 is available
-    which pip3
-    pip3 install --upgrade pip
+    which pip3 || echo "pip3 not found!"
+    python3 -m pip install --upgrade pip
 
     # Install Python packages
     pip3 install \
@@ -43,6 +40,7 @@ From: nipreps/fsl:6.0.4
     run_1st_level.py /app/run_1st_level.py
     workflows.py /app/workflows.py
     utils.py /app/utils.py
+
 %post
     chmod +x /app/run_1st_level.py
 
