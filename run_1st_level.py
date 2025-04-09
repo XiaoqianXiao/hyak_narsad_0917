@@ -73,8 +73,8 @@ entities = prepped_bold[0].entities
 def create_slurm_script(sub, inputs, work_dir, output_dir, task):
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=first_level_sub_{sub}
-#SBATCH --account=<your-account>  # Replace with your Hyak account
-#SBATCH --partition=compute
+#SBATCH --account=fang
+#SBATCH --partition=checkpoint
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --mem=20G

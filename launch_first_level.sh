@@ -8,7 +8,7 @@ for phaseID in 2 3; do
 
   for script in "$PHASE_DIR"/*.sh; do
     echo "Submitting $script"
-    bash "$script"
+    sbatch "$script"
   done
 done
 
