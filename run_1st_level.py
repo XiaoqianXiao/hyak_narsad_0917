@@ -33,7 +33,7 @@ fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data/behav')
 #scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
 scrubbed_dir = '/scrubbed_dir'
-container_path = "/gscratch/scrubbed/fanglab/xiaoqian/narsad-fmri_1st_level_1.0.sif"
+container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 # Workflow and output directories
 participant_label = []  # Can be set via args or env if needed
 run = []
