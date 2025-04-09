@@ -75,11 +75,11 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=first_level_sub_{sub}
 #SBATCH --account=fang
-#SBATCH --partition=cpu-g2
+#SBATCH --partition=ckpt-all
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks-per-node=1
 #SBATCH --mem=20G
-#SBATCH --time=4:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output={work_dir}/sub_{sub}_%j.out
 #SBATCH --error={work_dir}/sub_{sub}_%j.err
 
