@@ -1,5 +1,5 @@
 Bootstrap: docker
-From: neurodocker/fsl:6.0.6.4
+From: nipreps/fsl:6.0.6.4
 
 %environment
     export FSLDIR=/opt/fsl
