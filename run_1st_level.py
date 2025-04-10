@@ -17,7 +17,7 @@ os.environ['PATH'] += os.pathsep + os.path.join(os.environ['FSLDIR'], 'bin')
 plugin_settings = {
     'plugin': 'MultiProc',
     'plugin_args': {
-        'n_procs': 4,
+        'n_procs': 16,
         'raise_insufficient': False,
         'maxtasksperchild': 1,
     }
@@ -77,9 +77,10 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
 #SBATCH --account=fang
 #SBATCH --partition=cpu-g2
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --mem=20G
-#SBATCH --time=12:00:00
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=40G
+#SBATCH --time=6:00:00
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel/{task}_sub_{sub}_%j.out
 #SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel/{task}_sub_{sub}_%j.err
 
