@@ -143,12 +143,12 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
         (l1_model, feat_spec, [
             ('fsf_files', 'fsf_file'),
             ('ev_files', 'ev_files')]),
-        # --- Updated to FILMGLS ---
+        # --- Corrected connections for FILMGLS ---
         (feat_spec, feat_fit, [
             ('design_file', 'design_file'),
             ('con_file', 'tcon_file')]),
         (susan, feat_fit, [('smoothed_file', 'in_file')]),
-        (datasource, feat_fit, [('mask', 'mask')]),
+        (apply_mask, feat_fit, [('mask_file', 'mask')]),
         (feat_fit, feat_select, [('results_dir', 'base_directory')]),
         *[
             (feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')])
