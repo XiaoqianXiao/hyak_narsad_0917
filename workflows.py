@@ -99,8 +99,8 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     # feat_fit actually runs FEAT
     feat_fit = pe.Node(fsl.FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit', mem_gb=12)
     feat_select = pe.Node(nio.SelectFiles({
-        **{f'cope{i}': f'stats/cope{i}.nii.gz' for i in range(1, 30)},
-        **{f'varcope{i}': f'stats/varcope{i}.nii.gz' for i in range(1, 30)}
+        **{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 30)},
+        **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 30)}
     }), name='feat_select')
 
     ds_copes = [
