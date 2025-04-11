@@ -17,7 +17,7 @@ os.environ['PATH'] += os.pathsep + os.path.join(os.environ['FSLDIR'], 'bin')
 plugin_settings = {
     'plugin': 'MultiProc',
     'plugin_args': {
-        'n_procs': 16,
+        'n_procs': 4,
         'raise_insufficient': False,
         'maxtasksperchild': 1,
     }
@@ -97,7 +97,7 @@ apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/s
 
 # Function to run workflow for a single subject
 def run_subject_workflow(sub, inputs, work_dir, output_dir):
-    from workflows import first_level_wf  # Assumes workflows.py is in /app
+    from first_level_workflows import first_level_wf  # Assumes workflows.py is in /app
     workflow = first_level_wf(inputs, output_dir)
     workflow.base_dir = os.path.join(work_dir, f'sub_{sub}')
     workflow.run(**plugin_settings)
