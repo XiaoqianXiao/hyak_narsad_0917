@@ -24,7 +24,7 @@ plugin_settings = {
 }
 
 # Use environment variables for data paths
-root_dir = os.getenv('DATA_DIR', '/data')  # Default to /data if not set
+root_dir = os.getenv('DATA_DIR', '/data')
 project_name = 'NARSAD'
 data_dir = os.path.join(root_dir, project_name, 'MRI')
 bids_dir = data_dir

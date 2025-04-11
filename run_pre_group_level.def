@@ -1,0 +1,58 @@
+Bootstrap: docker
+From: neurodebian:bookworm
+
+%labels
+    Author XiaoqianXiao
+    Version 1.0
+    Description NARSAD fMRI pre-group-level workflow container
+
+%environment
+    export FSLOUTPUTTYPE=NIFTI_GZ
+    export FSLDIR=/usr/local/fsl
+    export PATH=$FSLDIR/bin:$PATH
+    export DATA_DIR=/data
+    export PYTHONNOUSERSITE=1
+
+%post
+    apt-get update && apt-get install -y \
+        git \
+        wget \
+        curl \
+        build-essential \
+        python3 \
+        python3-pip \
+        python3-setuptools \
+        python3-dev \
+        libglib2.0-0 \
+        libsm6 \
+        libxrender1 \
+        libxext6 \
+        libxt6 \
+        libgomp1 \
+        fsl-core
+
+    # Install pip packages
+    pip3 install --no-cache-dir \
+        pandas \
+        numpy \
+        bids-validator \
+        pybids \
+        niworkflows \
+        nipype==1.8.6 \
+        templateflow
+
+    # Optional: install templateflow resources (cached by volume or runtime otherwise)
+    mkdir -p /root/.cache/templateflow
+
+    # Set permissions
+    chmod -R a+rwx /usr/local /opt /root /data || true
+
+%files
+    run_pre_group_level.py /app/run_pre_group_level.py
+    group_level_workflows.py /app/group_level_workflows.py
+
+%post
+    chmod +x /app/run_pre_group_level.py
+
+%runscript
+    exec python3 /app/run_pre_group_level.py "$@"

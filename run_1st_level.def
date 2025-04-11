@@ -45,7 +45,7 @@ From: ubuntu:20.04
 
 %files
     run_1st_level.py /app/run_1st_level.py
-    workflows.py /app/workflows.py
+    first_level_workflows.py /app/first_level_workflows.py
     utils.py /app/utils.py
 
 %post
