@@ -148,7 +148,6 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
             ('design_file', 'design_file'),
             ('con_file', 'tcon_file')]),
         (susan, feat_fit, [('smoothed_file', 'in_file')]),
-        (datasource, feat_fit, [('mask', 'mask')]),
         (feat_fit, feat_select, [('results_dir', 'base_directory')]),
         *[
             (feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')])
