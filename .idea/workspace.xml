@@ -4,7 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="770ccd83-41a2-43b2-a5c4-0597a81d97db" name="Changes" comment="" />
+    <list default="true" id="770ccd83-41a2-43b2-a5c4-0597a81d97db" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/poetry.lock" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/workflows.py" beforeDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -82,7 +87,9 @@
       <option name="presentableId" value="Default" />
       <updated>1743539878458</updated>
       <workItem from="1743539879537" duration="44820000" />
-      <workItem from="1743703724492" duration="54571000" />
+      <workItem from="1743703724492" duration="85380000" />
+      <workItem from="1744150017879" duration="9915000" />
+      <workItem from="1744165380307" duration="89602000" />
     </task>
     <servers />
   </component>
