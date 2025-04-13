@@ -1,114 +1,72 @@
+#%%
 import os
-import shutil
-from bids.layout import BIDSLayout
-import pandas as pd
-from nipype import Workflow, Node
-from nipype.interfaces.utility import IdentityInterface
-from nipype.interfaces.io import DataSink
-from group_level_workflows import data_prepare_wf, roi_based_wf, wf_ROI
-from templateflow.api import get as tpl_get, templates as get_tpl_list
-
-# Set FSL environment
-os.environ['FSLDIR'] = '/Users/xiaoqianxiao/fsl'
-os.environ['PATH'] = f"{os.environ['FSLDIR']}/share/fsl/bin:{os.environ['FSLDIR']}/bin:{os.environ['PATH']}"
-
-# Define directories
-root_dir = '/Users/xiaoqianxiao/projects'
-project_name = 'NARSAD'
-data_dir = os.path.join(root_dir, project_name, 'MRI')
-derivatives_dir = os.path.join(data_dir, 'derivatives')
-workflow_dir = os.path.join(derivatives_dir, 'work_flows/groupLevel')
-results_dir = os.path.join(derivatives_dir, 'fMRI_analysis/groupLevel')
-
-for d in [workflow_dir, results_dir]:
-    os.makedirs(d, exist_ok=True)
-
-# Define standard reference image (e.g., MNI152 template from FSL)
-group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
-
-sub_no_MRI_phase2 = ['N102', 'N208']
-sub_no_MRI_phase3 = ['N102', 'N208', 'N120']
-
-SCR_dir = os.path.join(root_dir, project_name, 'EDR')
-drug_file = os.path.join(SCR_dir, 'drug_order.csv')
-ECR_file = os.path.join(SCR_dir, 'ECR.csv')
-
-# Load behavioral data
-df_drug = pd.read_csv(drug_file)
-df_drug['group'] = df_drug['subID'].apply(lambda x: 'Patients' if x.startswith('N1') else 'Controls')
-df_ECR = pd.read_csv(ECR_file)
-df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
-
-# Map groups and drugs
-group_levels = df_behav['group'].unique()
-drug_levels = df_behav['Drug'].unique()
-group_map = {level: idx + 1 for idx, level in enumerate(group_levels)}
-drug_map = {level: idx + 1 for idx, level in enumerate(drug_levels)}
-df_behav['group_id'] = df_behav['group'].map(group_map)
-df_behav['drug_id'] = df_behav['Drug'].map(drug_map)
-
-# Load first-level data
-firstlevel_dir = os.path.join(derivatives_dir, 'fMRI_analysis/firstlevel')
-glayout = BIDSLayout(firstlevel_dir, validate=False, config=['bids', 'derivatives'])
-sub_list = sorted(glayout.get_subjects())
-
-
-contr_list = list(range(1,30))
-tasks = ['phase2', 'phase3']
-
+import argparse
 from group_level_workflows import wf_randomise, wf_flameo
-if __name__ == "__main__":
-    for task in tasks:
-        task_results_dir = os.path.join(results_dir, f'task-{task}')
-        task_workflow_dir = os.path.join(workflow_dir, f'task-{task}')
-        os.makedirs(task_results_dir, exist_ok=True)
-        if os.path.exists(task_workflow_dir):
-            shutil.rmtree(task_workflow_dir)
-        os.makedirs(task_workflow_dir, exist_ok=True)
+from nipype import config, logging
+from templateflow.api import get as tpl_get
 
-        for contrast in contr_list:
-            design_files_path = os.path.join(task_results_dir, f'cope{contrast}/design_files')
-            cope_path = os.path.join(task_results_dir, f'cope{contrast}')
-            cope_file_path = os.path.join(cope_path, 'merged_cope.nii.gz')
-            varcope_file_path = os.path.join(cope_path, 'merged_varcope.nii.gz')
-            mask_file_path = group_mask
+# Nipype plugin settings
+plugin_settings = {
+    'plugin': 'MultiProc',
+    'plugin_args': {
+        'n_procs': 4,
+        'raise_insufficient': False,
+        'maxtasksperchild': 1,
+    }
+}
 
-            contrast_results_dir = os.path.join(task_results_dir, f'cope{contrast}/whole_brain')
-            contrast_workflow_dir = os.path.join(task_workflow_dir, f'cope{contrast}/whole_brain')
-            os.makedirs(contrast_results_dir, exist_ok=True)
-            os.makedirs(contrast_workflow_dir, exist_ok=True)
+config.set('execution', 'remove_unnecessary_outputs', 'false')
+logging.update_logging(config)
 
-            # Choose workflow: 'flameo' or 'randomise'
-            analysis_type = 'randomise'  # Switch to 'flameo' to run FLAMEO
+def run_group_level_wf(task, contrast, analysis_type, paths):
+    wf_func = wf_randomise if analysis_type == 'randomise' else wf_flameo
+    wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
 
-            if analysis_type == 'flameo':
-                wf_func = wf_flameo
-                wf_name = f"wf_flameo_{task}_cope{contrast}"
-                cleanup_nodes = ['flameo', 'smoothness', 'clustering']
-            else:  # randomise
-                wf_func = wf_randomise
-                wf_name = f"wf_randomise_{task}_cope{contrast}"
-                cleanup_nodes = ['randomise', 'fdr_ztop']
+    wf = wf_func(output_dir=paths['result_dir'], name=wf_name)
+    wf.base_dir = paths['workflow_dir']
+    wf.inputs.inputnode.cope_file = paths['cope_file']
+    wf.inputs.inputnode.mask_file = paths['mask_file']
+    wf.inputs.inputnode.design_file = paths['design_file']
+    wf.inputs.inputnode.con_file = paths['con_file']
+    wf.inputs.inputnode.result_dir = paths['result_dir']
 
-            analysis_wf = wf_func(output_dir=contrast_results_dir, name=wf_name)
-            analysis_wf.base_dir = contrast_workflow_dir
+    if analysis_type == 'flameo':
+        wf.inputs.inputnode.var_cope_file = paths['varcope_file']
+        wf.inputs.inputnode.grp_file = paths['grp_file']
 
-            # Set common inputs
-            analysis_wf.inputs.inputnode.cope_file = cope_file_path
-            analysis_wf.inputs.inputnode.mask_file = mask_file_path
-            analysis_wf.inputs.inputnode.design_file = os.path.join(design_files_path, 'design.mat')
-            analysis_wf.inputs.inputnode.con_file = os.path.join(design_files_path, 'contrast.con')
-            analysis_wf.inputs.inputnode.result_dir = contrast_results_dir
+    wf.run(**plugin_settings)
 
-            # Set FLAMEO-specific inputs
-            if analysis_type == 'flameo':
-                analysis_wf.inputs.inputnode.var_cope_file = varcope_file_path
-                analysis_wf.inputs.inputnode.grp_file = os.path.join(design_files_path, 'design.grp')
+#%%
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--task', required=True)
+    parser.add_argument('--contrast', required=True, type=int)
+    parser.add_argument('--analysis_type', default='randomise', choices=['randomise', 'flameo'])
+    parser.add_argument('--base_dir', required=True)
 
-            analysis_wf.run(plugin='MultiProc', plugin_args={'n_procs': 4})
+    args = parser.parse_args()
+    task = args.task
+    contrast = args.contrast
+    analysis_type = args.analysis_type
 
-            # Cleanup
-            intermediate_dirs = [os.path.join(contrast_workflow_dir, node) for node in cleanup_nodes]
-            for d in intermediate_dirs:
-                if os.path.exists(d):
-                    shutil.rmtree(d)
+    # Use TemplateFlow to get group mask path
+    group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
+
+    result_dir = os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'whole_brain')
+    workflow_dir = os.path.join(args.base_dir, 'groupLevel', f'task-{task}', f'cope{contrast}', 'whole_brain')
+
+    paths = {
+        'result_dir': result_dir,
+        'workflow_dir': workflow_dir,
+        'cope_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'merged_cope.nii.gz'),
+        'varcope_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'merged_varcope.nii.gz'),
+        'design_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'design.mat'),
+        'con_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'contrast.con'),
+        'grp_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'design.grp'),
+        'mask_file': group_mask
+    }
+
+    os.makedirs(paths['result_dir'], exist_ok=True)
+    os.makedirs(paths['workflow_dir'], exist_ok=True)
+
+    run_group_level_wf(task, contrast, analysis_type, paths)
