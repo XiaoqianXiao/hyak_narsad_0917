@@ -53,7 +53,7 @@ glayout = BIDSLayout(firstlevel_dir, validate=False, config=['bids', 'derivative
 sub_list = sorted(glayout.get_subjects())
 
 
-contr_list = list(range(1,26))
+contr_list = list(range(1,30))
 tasks = ['phase2', 'phase3']
 
 from group_level_workflows import wf_randomise, wf_flameo

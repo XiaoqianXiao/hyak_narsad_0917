@@ -51,7 +51,7 @@ df_behav['group_id'] = df_behav['group'].map(group_map)
 df_behav['drug_id'] = df_behav['Drug'].map(drug_map)
 
 # Load first-level data
-firstlevel_dir = os.path.join(derivatives_dir, 'fMRI_analysis/firstlevel')
+firstlevel_dir = os.path.join(derivatives_dir, 'fMRI_analysis/firstLevel')
 glayout = BIDSLayout(firstlevel_dir, validate=False, config=['bids', 'derivatives'])
 sub_list = sorted(glayout.get_subjects())
 
