@@ -6,9 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="770ccd83-41a2-43b2-a5c4-0597a81d97db" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/poetry.lock" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/workflows.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level.def" beforeDir="false" afterPath="$PROJECT_DIR$/run_pre_group_level.def" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -89,7 +87,7 @@
       <workItem from="1743539879537" duration="44820000" />
       <workItem from="1743703724492" duration="85380000" />
       <workItem from="1744150017879" duration="9915000" />
-      <workItem from="1744165380307" duration="89602000" />
+      <workItem from="1744165380307" duration="92078000" />
     </task>
     <servers />
   </component>
