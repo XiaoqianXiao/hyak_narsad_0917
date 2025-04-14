@@ -8,7 +8,7 @@ From: narsad-fmri_1st_level_1.0.sif
     export FSLOUTPUTTYPE=NIFTI_GZ
 
 %files
-    run_pre_group_level.py /app/run_group_level.py
+    run_group_level.py /app/run_group_level.py
     group_level_workflows.py /app/group_level_workflows.py
 
 %post
