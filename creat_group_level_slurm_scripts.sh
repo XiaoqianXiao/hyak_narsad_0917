@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Environment settings
-container_path="/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-group-level_1.0.sif"
+container_path="/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_group_level_1.0.sif"
 base_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows"
 script_base_dir="${base_dir}/groupLevel/whole_brain"
 
