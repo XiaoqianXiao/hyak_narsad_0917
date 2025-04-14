@@ -2,7 +2,7 @@
 
 # Environment settings
 container_path="/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-group-level_1.0.sif"
-base_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/MRI/derivatives"
+base_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flow"
 script_base_dir="${base_dir}/groupLevel/whole_brain"
 
 tasks=("phase2" "phase3")
