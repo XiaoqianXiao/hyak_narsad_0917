@@ -18,6 +18,14 @@ plugin_settings = {
 config.set('execution', 'remove_unnecessary_outputs', 'false')
 logging.update_logging(config)
 
+# Define directories
+root_dir = os.getenv('DATA_DIR', '/data')
+project_name = 'NARSAD'
+data_dir = os.path.join(root_dir, project_name, 'MRI')
+derivatives_dir = os.path.join(data_dir, 'derivatives')
+results_dir = os.path.join(derivatives_dir, 'fMRI_analysis/groupLevel')
+scrubbed_dir = '/scrubbed_dir'
+workflows_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/groupLevel')
 def run_group_level_wf(task, contrast, analysis_type, paths):
     wf_func = wf_randomise if analysis_type == 'randomise' else wf_flameo
     wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
@@ -52,17 +60,17 @@ if __name__ == '__main__':
     # Use TemplateFlow to get group mask path
     group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
 
-    result_dir = os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'whole_brain')
-    workflow_dir = os.path.join(args.base_dir, 'groupLevel', f'task-{task}', f'cope{contrast}', 'whole_brain')
+    result_dir = os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'whole_brain')
+    workflow_dir = os.path.join(workflows_dir, f'task-{task}', f'cope{contrast}', 'whole_brain')
 
     paths = {
         'result_dir': result_dir,
         'workflow_dir': workflow_dir,
-        'cope_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'merged_cope.nii.gz'),
-        'varcope_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'merged_varcope.nii.gz'),
-        'design_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'design.mat'),
-        'con_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'contrast.con'),
-        'grp_file': os.path.join(args.base_dir, 'fMRI_analysis', 'groupLevel', f'task-{task}', f'cope{contrast}', 'design_files', 'design.grp'),
+        'cope_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'merged_cope.nii.gz'),
+        'varcope_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'merged_varcope.nii.gz'),
+        'design_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'design.mat'),
+        'con_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'contrast.con'),
+        'grp_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'design.grp'),
         'mask_file': group_mask
     }
 
