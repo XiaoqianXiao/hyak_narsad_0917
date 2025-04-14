@@ -56,7 +56,7 @@ glayout = BIDSLayout(firstlevel_dir, validate=False, config=['bids', 'derivative
 sub_list = sorted(glayout.get_subjects())
 
 
-contr_list = list(range(1,30))
+contr_list = list(range(1,32))
 tasks = ['phase2', 'phase3']
 
 def collect_task_data(task, contrast, sub_list):
