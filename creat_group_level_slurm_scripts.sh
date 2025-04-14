@@ -33,7 +33,7 @@ for task in "${tasks[@]}"; do
 #SBATCH --error=${err_path}
 
 module load apptainer
-apptainer exec -B /gscratch:/gscratch ${container_path} \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir ${container_path} \\
     python3 /app/run_group_level.py \\
     --task ${task} \\
     --contrast ${contrast} \\
