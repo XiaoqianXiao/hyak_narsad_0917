@@ -90,7 +90,11 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
                    ('first_half_CS+_safe>second_half_CS+_safe', 'T', ['CSS_first_half', 'CSS_second_half'], [1, -1]),
                    ('first_half_CS+_safe<second_half_CS+_safe', 'T', ['CSS_first_half', 'CSS_second_half'], [-1, 1]),
                    ('first_half_CS+_reinf>second_half_CS+_reinf', 'T', ['CSR_first_half', 'CSR_second_half'], [1, -1]),
-                   ('first_half_CS+_reinf<second_half_CS+_reinf', 'T', ['CSR_first_half', 'CSR_second_half'], [-1, 1])
+                   ('first_half_CS+_reinf<second_half_CS+_reinf', 'T', ['CSR_first_half', 'CSR_second_half'], [-1, 1]),
+                   ('early>later_CS+_safe>CS+_reinf', 'T',
+                    ['CSS_first_half', 'CSS_second_half', 'CSR_first_half', 'CSR_second_half'], [0.5, -0.5, -0.5, 0.5]),
+                   ('early<later_CS+_safe>CS+_reinf', 'T',
+                    ['CSS_first_half', 'CSS_second_half', 'CSR_first_half', 'CSR_second_half'], [-0.5, 0.5, 0.5, -0.5])
                    ],
     ), name='l1_model')
 
@@ -99,22 +103,22 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     # feat_fit actually runs FEAT
     feat_fit = pe.Node(fsl.FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit', mem_gb=12)
     feat_select = pe.Node(nio.SelectFiles({
-        **{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 30)},
-        **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 30)}
+        **{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 32)},
+        **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 32)}
     }), name='feat_select')
 
     ds_copes = [
         pe.Node(DerivativesDataSink(
             base_directory=str(output_dir), keep_dtype=False, desc=f'cope{i}'),
             name=f'ds_cope{i}', run_without_submitting=True)
-        for i in range(1, 30)
+        for i in range(1, 32)
     ]
 
     ds_varcopes = [
         pe.Node(DerivativesDataSink(
             base_directory=str(output_dir), keep_dtype=False, desc=f'varcope{i}'),
             name=f'ds_varcope{i}', run_without_submitting=True)
-        for i in range(1, 30)
+        for i in range(1, 32)
     ]
 
     workflow.connect([
@@ -126,11 +130,11 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
             ('regressors', 'regressors_file')]),
         *[
             (datasource, ds_copes[i - 1], [('bold', 'source_file')])
-            for i in range(1, 30)
+            for i in range(1, 32)
         ],
         *[
             (datasource, ds_varcopes[i - 1], [('bold', 'source_file')])
-            for i in range(1, 30)
+            for i in range(1, 32)
         ],
         (susan, l1_spec, [('smoothed_file', 'functional_runs')]),
         (datasource, l1_spec, [('tr', 'time_repetition')]),
@@ -151,11 +155,11 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
         (feat_fit, feat_select, [('results_dir', 'base_directory')]),
         *[
             (feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')])
-            for i in range(1, 30)
+            for i in range(1, 32)
         ],
         *[
             (feat_select, ds_varcopes[i - 1], [(f'varcope{i}', 'in_file')])
-            for i in range(1, 30)
+            for i in range(1, 32)
         ],
     ])
     return workflow
