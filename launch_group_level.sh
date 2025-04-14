@@ -1,6 +1,6 @@
 #!/bin/bash
 
-scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flow/groupLevel/whole_brain"
+scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/groupLevel/whole_brain"
 
 #for phaseID in 2 3; do
 for phaseID in 2; do
