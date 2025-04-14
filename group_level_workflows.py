@@ -330,7 +330,7 @@ def whole_brain_wf(output_dir, name="whole_brain_wf"):
                      name='inputnode')
 
     # Randomise node (TFCE-based inference)
-    randomise = Node(Randomise(num_perm=5000,  # Number of permutations
+    randomise = Node(Randomise(num_perm=10000,  # Number of permutations
                                tfce=True,      # Use TFCE
                                vox_p_values=True),  # Output voxelwise p-values
                      name='randomise')
