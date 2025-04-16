@@ -34,7 +34,7 @@ for task in "${tasks[@]}"; do
 
 module load apptainer
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir ${container_path} \\
-    python3 /app/run_group_level.py \\
+    python3 /app/run_group_level_onlyPlacebo.py \\
     --task ${task} \\
     --contrast ${contrast} \\
     --analysis_type ${analysis_type} \\
