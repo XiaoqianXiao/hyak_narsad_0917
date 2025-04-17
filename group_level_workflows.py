@@ -5,84 +5,71 @@ from nipype import DataSink
 import os
 import shutil
 import glob
+import subprocess
 
 
 def create_dummy_design_files(group_info, output_dir):
     """
     Create:
       • design.mat      — the design matrix for FLAMEO
-      • design.grp      — a VEST‐formatted group file (one integer per subject)
+      • design.grp      — a VEST‐formatted covsplit file (only for ANOVA)
       • contrast.con    — contrast definitions
-    """
-    import os
-    import subprocess
 
+    Returns:
+        design_file, covsplit_vest (or None), contrast_con
+    """
     design_dir = os.path.join(output_dir, 'design_files')
     os.makedirs(design_dir, exist_ok=True)
 
     design_file = os.path.join(design_dir, 'design.mat')
-    grp_file    = os.path.join(design_dir, 'design.grp')      # will become VEST
+    plain_grp   = os.path.join(design_dir, 'covsplit.txt')
+    vest_grp    = os.path.join(design_dir, 'design.grp')
     con_file    = os.path.join(design_dir, 'contrast.con')
 
-    drug_ids     = [drug for _, _, drug in group_info]
+    # unpack group_info triples
+    drug_ids = [drug for _, _, drug in group_info]
     unique_drugs = sorted(set(drug_ids))
-    n            = len(group_info)
+    n = len(group_info)
 
-    # --- 1) design.mat & contrast.con as before ---
+    # 1) design.mat + contrast.con
     if len(unique_drugs) == 1:
         # one‐sample Patients vs Controls
-        rows = ['1' if grp == 1 else '-1'
-                for _, grp, _ in group_info]
+        rows = ['1' if grp == 1 else '-1' for _, grp, _ in group_info]
         with open(design_file, 'w') as f:
-            f.write("/NumWaves 1\n")
-            f.write(f"/NumPoints {n}\n")
-            f.write("/Matrix\n")
+            f.write(f"/NumWaves 1\n/NumPoints {n}\n/Matrix\n")
             f.write("\n".join(rows))
-
         with open(con_file, 'w') as f:
-            f.write("/NumWaves 1\n")
-            f.write("/NumContrasts 1\n")
-            f.write("/Matrix\n1\n")
+            f.write("/NumWaves 1\n/NumContrasts 1\n/Matrix\n1\n")
+        covsplit_vest = None
 
     else:
-        # full 2×2 ANOVA: [P+Pl, P+Ox, C+Pl, C+Ox]
-        design_rows = []
+        # 2×2 ANOVA
+        rows = []
         for _, grp, drug in group_info:
-            row = [0,0,0,0]
-            if grp == 1:  # Patient
-                idx = 0 if drug == unique_drugs[0] else 1
-            else:         # Control
-                idx = 2 if drug == unique_drugs[0] else 3
-            row[idx] = 1
-            design_rows.append(" ".join(map(str,row)))
-        with open(design_file, 'w') as f:
-            f.write("/NumWaves 4\n")
-            f.write(f"/NumPoints {n}\n")
-            f.write("/Matrix\n")
-            f.write("\n".join(design_rows))
+            ev = [0,0,0,0]
+            if grp == 1:  # Patients
+                ev[0 if drug == unique_drugs[0] else 1] = 1
+            else:         # Controls
+                ev[2 if drug == unique_drugs[0] else 3] = 1
+            rows.append(" ".join(map(str, ev)))
 
-        contrasts = [
-            "1  1 -1 -1",  # Group
-            "1 -1  1 -1",  # Drug
-            "1 -1 -1  1",  # Interaction
-        ]
+        with open(design_file, 'w') as f:
+            f.write(f"/NumWaves 4\n/NumPoints {n}\n/Matrix\n")
+            f.write("\n".join(rows))
+        contrasts = ["1  1 -1 -1", "1 -1  1 -1", "1 -1 -1  1"]
         with open(con_file, 'w') as f:
-            f.write("/NumWaves 4\n")
-            f.write(f"/NumContrasts {len(contrasts)}\n")
-            f.write("/Matrix\n")
+            f.write(f"/NumWaves 4\n/NumContrasts {len(contrasts)}\n/Matrix\n")
             f.write("\n".join(contrasts))
 
-    # --- 2) write plain text covsplit, then convert to VEST ---
-    covtxt = os.path.join(design_dir, 'covsplit.txt')
-    with open(covtxt, 'w') as f:
-        for _, grp, _ in group_info:
-            f.write(f"{grp}\n")
+        # write plain group IDs and convert to vest
+        with open(plain_grp, 'w') as f:
+            for _, grp, _ in group_info:
+                f.write(f"{grp}\n")
+        subprocess.run(['Text2Vest', plain_grp, vest_grp], check=True)
+        os.remove(plain_grp)
+        covsplit_vest = vest_grp
 
-    # Text2Vest is shipped with FSL; this produces a true VEST file
-    subprocess.run(['Text2Vest', covtxt, grp_file], check=True)
-    os.remove(covtxt)
-
-    return design_file, grp_file, con_file
+    return design_file, covsplit_vest, con_file
 
 
 
@@ -451,69 +438,90 @@ def flatten_stats(stats):
     return stats
 
 def wf_flameo(output_dir, name="wf_flameo"):
-    """Workflow for group-level analysis with FLAMEO and clustering (GRF with dlh)."""
+    """Workflow for group-level analysis with FLAMEO and GRF clustering (dlh)."""
     wf = Workflow(name=name, base_dir=output_dir)
 
-    # Input node
-    inputnode = Node(IdentityInterface(fields=['cope_file', 'var_cope_file', 'mask_file',
-                                               'design_file', 'grp_file', 'con_file', 'result_dir']),
-                     name='inputnode')
+    # Input node now has 'covsplit_file' instead of 'grp_file'
+    inputnode = Node(
+        IdentityInterface(fields=[
+            'cope_file', 'var_cope_file', 'mask_file',
+            'design_file', 'covsplit_file', 'con_file',
+            'result_dir'
+        ]),
+        name='inputnode'
+    )
 
-    # FLAMEO node
-    flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')  # flame1 for mixed effects
+    # FLAMEO: will ignore cov_split_file if it's None
+    flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')
 
     # Smoothness estimation for GRF clustering
-    smoothness = MapNode(SmoothEstimate(),
-                         iterfield=['zstat_file'],  # Only zstat_file iterates
-                         name='smoothness')
+    smoothness = MapNode(
+        SmoothEstimate(),
+        iterfield=['zstat_file'],
+        name='smoothness'
+    )
 
-    # Clustering node with dlh for GRF-based correction
-    clustering = MapNode(Cluster(threshold=2.3,  # Z-threshold (e.g., 2.3 or 3.1)
-                                 connectivity=26,  # 3D connectivity
-                                 out_threshold_file=True,
-                                 out_index_file=True,
-                                 out_localmax_txt_file=True,  # Local maxima text file
-                                 pthreshold=0.05),  # Cluster-level FWE threshold
-                         iterfield=['in_file', 'dlh', 'volume'],
-                         name='clustering')
+    # Clustering node with dlh
+    clustering = MapNode(
+        Cluster(
+            threshold=2.3,
+            connectivity=26,
+            out_threshold_file=True,
+            out_index_file=True,
+            out_localmax_txt_file=True,
+            pthreshold=0.05
+        ),
+        iterfield=['in_file', 'dlh', 'volume'],
+        name='clustering'
+    )
 
     # Output node
-    outputnode = Node(IdentityInterface(fields=['zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks']),
-                      name='outputnode')
+    outputnode = Node(
+        IdentityInterface(fields=[
+            'zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks'
+        ]),
+        name='outputnode'
+    )
 
-    # DataSink
+    # DataSink to save results
     datasink = Node(DataSink(base_directory=output_dir), name='datasink')
 
-    # Workflow connections
+    # Connections
     wf.connect([
-        # Inputs to FLAMEO
-        (inputnode, flameo, [('cope_file', 'cope_file'),
-                             ('var_cope_file', 'var_cope_file'),
-                             ('mask_file', 'mask_file'),
-                             ('design_file', 'design_file'),
-                             ('grp_file', 'cov_split_file'),
-                             ('con_file', 't_con_file')]),
+        # Inputs → FLAMEO
+        (inputnode, flameo, [
+            ('cope_file',        'cope_file'),
+            ('var_cope_file',    'var_cope_file'),
+            ('mask_file',        'mask_file'),
+            ('design_file',      'design_file'),
+            ('covsplit_file',    'cov_split_file'),
+            ('con_file',         't_con_file'),
+        ]),
 
-        # Smoothness estimation
-        (flameo, smoothness, [(('zstats', flatten_stats), 'zstat_file')]),
-        (inputnode, smoothness, [('mask_file', 'mask_file')]),  # Single mask, no iteration
+        # FLAMEO → SmoothEstimate
+        (flameo,   smoothness, [(('zstats', flatten_stats), 'zstat_file')]),
+        (inputnode, smoothness, [('mask_file',      'mask_file')]),
 
-        # Clustering with dlh
-        (flameo, clustering, [(('zstats', flatten_stats), 'in_file')]),
-        (smoothness, clustering, [('volume', 'volume')]),
-        (smoothness, clustering, [('dlh', 'dlh')]),
+        # FLAMEO & SmoothEstimate → Clustering
+        (flameo,     clustering, [(('zstats', flatten_stats), 'in_file')]),
+        (smoothness, clustering, [('volume', 'volume'),
+                                  ('dlh',    'dlh')]),
 
-        # Outputs to outputnode
-        (flameo, outputnode, [('zstats', 'zstats')]),
-        (clustering, outputnode, [('threshold_file', 'cluster_thresh'),
-                                  ('index_file', 'cluster_index'),
-                                  ('localmax_txt_file', 'cluster_peaks')]),
+        # Collect outputs
+        (flameo,     outputnode, [('zstats', 'zstats')]),
+        (clustering, outputnode, [
+            ('threshold_file',       'cluster_thresh'),
+            ('index_file',           'cluster_index'),
+            ('localmax_txt_file',    'cluster_peaks')
+        ]),
 
-        # Outputs to DataSink
-        (outputnode, datasink, [('zstats', 'stats.@zstats'),
-                                ('cluster_thresh', 'cluster_results.@thresh'),
-                                ('cluster_index', 'cluster_results.@index'),
-                                ('cluster_peaks', 'cluster_results.@peaks')])
+        # Send to disk
+        (outputnode, datasink, [
+            ('zstats',         'stats.@zstats'),
+            ('cluster_thresh', 'cluster_results.@thresh'),
+            ('cluster_index',  'cluster_results.@index'),
+            ('cluster_peaks',  'cluster_results.@peaks'),
+        ]),
     ])
 
     return wf
@@ -534,52 +542,85 @@ def flatten_stats(stats):
         return [item for sublist in stats for item in sublist]
     return stats
 
+def flatten_list(nested):
+    """Flatten a nested list of files into a 1D list."""
+    return [f for sub in nested for f in sub]
+
 def wf_randomise(output_dir, name="wf_randomise"):
-    """Workflow for group-level analysis with Randomise and TFCE."""
+    """Workflow for group-level analysis with Randomise + TFCE."""
     wf = Workflow(name=name, base_dir=output_dir)
 
-    # Input node
-    inputnode = Node(IdentityInterface(fields=['cope_file', 'mask_file', 'design_file', 'con_file', 'result_dir']),
-                     name='inputnode')
+    # 1) Inputs: cope, mask, design.mat, contrast.con
+    inputnode = Node(
+        IdentityInterface(fields=[
+            'cope_file',    # in_file for Randomise
+            'mask_file',    # mask for Randomise
+            'design_file',  # design_mat for Randomise
+            'con_file',     # tcon for Randomise
+        ]),
+        name='inputnode'
+    )
 
-    # Randomise node (TFCE-based inference)
-    randomise = Node(Randomise(num_perm=5000,  # Number of permutations
-                               tfce=True,      # Use TFCE
-                               vox_p_values=True),  # Output voxelwise p-values
-                     name='randomise')
+    # 2) Randomise: TFCE + voxelwise p‑values
+    randomise = Node(
+        Randomise(
+            num_perm=10000,
+            tfce=True,
+            vox_p_values=True
+        ),
+        name='randomise'
+    )
 
-    # Optional: Convert TFCE p-values to z-scores for visualization
-    fdr_ztop = MapNode(ImageMaths(op_string='-ztop', suffix='_pval'),
-                       iterfield=['in_file'],
-                       name='fdr_ztop')
+    # 3) Convert TFCE‐corrected p’s → z for easy thresholding
+    fdr_ztop = MapNode(
+        ImageMaths(op_string='-ztop', suffix='_zstat'),
+        iterfield=['in_file'],
+        name='fdr_ztop'
+    )
 
-    # Output node
-    outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files', 'fdr_thresh']),
-                      name='outputnode')
+    # 4) Collect everything
+    outputnode = Node(
+        IdentityInterface(fields=[
+            'tstat_files',         # raw t‑stats
+            'tfce_corr_p_files',   # TFCE‑corrected p’s
+            'z_thresh_files',      # optional z‑conversions
+        ]),
+        name='outputnode'
+    )
 
-    # DataSink
+    # 5) Sink to disk
     datasink = Node(DataSink(base_directory=output_dir), name='datasink')
 
-    # Workflow connections
+    # --- Connections ---
     wf.connect([
-        # Inputs to Randomise
-        (inputnode, randomise, [('cope_file', 'in_file'),
-                                ('mask_file', 'mask'),
-                                ('design_file', 'design_mat'),
-                                ('con_file', 'tcon')]),
+        # a) feed inputs into Randomise
+        (inputnode, randomise, [
+            ('cope_file',   'in_file'),
+            ('mask_file',   'mask'),
+            ('design_file', 'design_mat'),
+            ('con_file',    'tcon'),
+        ]),
 
-        # Optional TFCE p-value conversion
-        (randomise, fdr_ztop, [(('t_corrected_p_files', flatten_stats), 'in_file')]),
+        # b) take TFCE‐corrected p’s → z‑scores
+        (randomise, fdr_ztop, [
+            (('t_corrected_p_files', flatten_list), 'in_file')
+        ]),
 
-        # Outputs to outputnode
-        (randomise, outputnode, [('tstat_files', 'tstat_files'),
-                                 ('t_corrected_p_files', 'tfce_corr_p_files')]),
-        (fdr_ztop, outputnode, [('out_file', 'fdr_thresh')]),
+        # c) collect Randomise outputs
+        (randomise, outputnode, [
+            ('tstat_files',         'tstat_files'),
+            ('t_corrected_p_files', 'tfce_corr_p_files'),
+        ]),
+        (fdr_ztop, outputnode, [
+            ('out_file', 'z_thresh_files'),
+        ]),
 
-        # Outputs to DataSink
-        (outputnode, datasink, [('tstat_files', 'stats.@tstats'),
-                                ('tfce_corr_p_files', 'stats.@tfce_corr_p'),
-                                ('fdr_thresh', 'stats.@fdr_thresh')])
+        # d) write out to disk
+        (outputnode, datasink, [
+            ('tstat_files',       'stats.@tstats'),
+            ('tfce_corr_p_files', 'stats.@tfce_p'),
+            ('z_thresh_files',    'stats.@zscores'),
+        ])
     ])
 
     return wf
