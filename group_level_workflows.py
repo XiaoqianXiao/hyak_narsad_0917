@@ -8,55 +8,103 @@ import glob
 
 
 def create_dummy_design_files(group_info, output_dir):
-    """Create design matrix, variance groups, and contrasts for 2x2 dummy-coded ANOVA"""
+    """
+    Create design.mat, design.grp, and contrast.con for either:
+      • One‑sample test (single drug level) comparing Patients vs Controls
+      • 2×2 dummy‑coded ANOVA (Patients/Controls × Placebo/Oxytocin)
+    """
     import os
-    os.makedirs(f"{output_dir}/design_files", exist_ok=True)
-    design_file = f"{output_dir}/design_files/design.mat"
-    grp_file = f"{output_dir}/design_files/design.grp"
-    con_file = f"{output_dir}/design_files/contrast.con"
+    import numpy as np
 
-    design_mat = []
-    variance_groups = []
-    for i, (_, subj_group, subj_drug) in enumerate(group_info):
-        row = [0, 0, 0, 0]
-        if subj_group == 1:  # Patients
-            if subj_drug == 1:  # Placebo
-                row[0] = 1
-                variance_groups.append(1)
-            else:  # Oxytocin
-                row[1] = 1
-                variance_groups.append(2)
-        else:  # Controls
-            if subj_drug == 1:  # Placebo
-                row[2] = 1
-                variance_groups.append(3)
-            else:  # Oxytocin
-                row[3] = 1
-                variance_groups.append(4)
-        design_mat.append(" ".join(map(str, row)))
+    design_dir = os.path.join(output_dir, 'design_files')
+    os.makedirs(design_dir, exist_ok=True)
+    design_file = os.path.join(design_dir, 'design.mat')
+    grp_file    = os.path.join(design_dir, 'design.grp')
+    con_file    = os.path.join(design_dir, 'contrast.con')
 
-    with open(design_file, 'w') as f:
-        f.write("/NumWaves 4\n")
-        f.write("/NumPoints {}\n".format(len(group_info)))
-        f.write("/Matrix\n")
-        f.write("\n".join(design_mat))
+    # extract just the drug levels present
+    drug_ids = [drug for _, _, drug in group_info]
+    unique_drugs = sorted(set(drug_ids))
 
-    with open(grp_file, 'w') as f:
-        f.write("/NumWaves 1\n")
-        f.write("/NumPoints {}\n".format(len(group_info)))
-        f.write("/Matrix\n")
-        f.write("\n".join(map(str, variance_groups)))
+    n = len(group_info)
 
-    contrasts = [
-        "1  1 -1 -1",  # Main effect Group (Patients vs. Controls)
-        "1 -1  1 -1",  # Main effect Drug (Placebo vs. Oxytocin)
-        "1 -1 -1  1",  # Interaction (Group × Drug)
-    ]
-    with open(con_file, 'w') as f:
-        f.write("/NumWaves 4\n")
-        f.write("/NumContrasts 3\n")
-        f.write("/Matrix\n")
-        f.write("\n".join(contrasts))
+    if len(unique_drugs) == 1:
+        # --- One-sample Patients vs Controls within the single drug level ---
+        # design = +1 for Patients, -1 for Controls
+        design_rows = []
+        variance_groups = []
+        for _, grp, _ in group_info:
+            design_rows.append(str( 1 if grp == 1 else -1 ))
+            variance_groups.append(str(grp))  # 1=Patients, 2=Controls
+
+        # write design.mat
+        with open(design_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(design_rows))
+
+        # write design.grp
+        with open(grp_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(variance_groups))
+
+        # write contrast.con (test Patients > Controls)
+        with open(con_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write("/NumContrasts 1\n")
+            f.write("/Matrix\n1\n")
+
+    else:
+        # --- Full 2×2 ANOVA dummy coding: [P+Pl, P+Ox, C+Pl, C+Ox] ---
+        design_mat = []
+        variance_groups = []
+        for _, grp, drug in group_info:
+            # row = [Patients–Placebo, Patients–Oxytocin, Controls–Placebo, Controls–Oxytocin]
+            row = [0, 0, 0, 0]
+            if grp == 1:  # Patients
+                if drug == unique_drugs[0]:
+                    row[0] = 1
+                    variance_groups.append(1)
+                else:
+                    row[1] = 1
+                    variance_groups.append(2)
+            else:  # Controls
+                if drug == unique_drugs[0]:
+                    row[2] = 1
+                    variance_groups.append(3)
+                else:
+                    row[3] = 1
+                    variance_groups.append(4)
+            design_mat.append(" ".join(map(str, row)))
+
+        # write design.mat
+        with open(design_file, 'w') as f:
+            f.write("/NumWaves 4\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(design_mat))
+
+        # write design.grp
+        with open(grp_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(map(str, variance_groups)))
+
+        # define the 3 contrasts: Main effects & interaction
+        contrasts = [
+            "1  1 -1 -1",  # Group effect (Patients vs. Controls)
+            "1 -1  1 -1",  # Drug effect  (first vs second drug)
+            "1 -1 -1  1",  # Interaction   (G×D)
+        ]
+        with open(con_file, 'w') as f:
+            f.write("/NumWaves 4\n")
+            f.write(f"/NumContrasts {len(contrasts)}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(contrasts))
 
     return design_file, grp_file, con_file
 
