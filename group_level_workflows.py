@@ -11,70 +11,59 @@ def create_dummy_design_files(group_info, output_dir):
     """
     Create:
       • design.mat      — the design matrix for FLAMEO
-      • design.grp      — plain group‐ID file (one integer per line), for covsplit
+      • design.grp      — a VEST‐formatted group file (one integer per subject)
       • contrast.con    — contrast definitions
     """
     import os
+    import subprocess
 
     design_dir = os.path.join(output_dir, 'design_files')
     os.makedirs(design_dir, exist_ok=True)
 
     design_file = os.path.join(design_dir, 'design.mat')
-    grp_file    = os.path.join(design_dir, 'design.grp')      # now a plain covsplit file
+    grp_file    = os.path.join(design_dir, 'design.grp')      # will become VEST
     con_file    = os.path.join(design_dir, 'contrast.con')
 
-    # pull out just the (sub, group, drug) triples
-    drug_ids      = [drug for _, _, drug in group_info]
-    unique_drugs  = sorted(set(drug_ids))
-    n             = len(group_info)
+    drug_ids     = [drug for _, _, drug in group_info]
+    unique_drugs = sorted(set(drug_ids))
+    n            = len(group_info)
 
-    # 1) write design.mat exactly as before
+    # --- 1) design.mat & contrast.con as before ---
     if len(unique_drugs) == 1:
         # one‐sample Patients vs Controls
-        #  design matrix = +1 for Patients, -1 for Controls
         rows = ['1' if grp == 1 else '-1'
                 for _, grp, _ in group_info]
-
         with open(design_file, 'w') as f:
             f.write("/NumWaves 1\n")
             f.write(f"/NumPoints {n}\n")
             f.write("/Matrix\n")
             f.write("\n".join(rows))
 
-        # only one contrast: Patients > Controls
         with open(con_file, 'w') as f:
             f.write("/NumWaves 1\n")
             f.write("/NumContrasts 1\n")
             f.write("/Matrix\n1\n")
 
     else:
-        # 2×2 ANOVA: [P+Pl, P+Ox, C+Pl, C+Ox]
+        # full 2×2 ANOVA: [P+Pl, P+Ox, C+Pl, C+Ox]
         design_rows = []
-        variance_groups = []
         for _, grp, drug in group_info:
             row = [0,0,0,0]
-            if grp == 1:            # Patient
-                if drug == unique_drugs[0]:
-                    row[0] = 1; variance_groups.append(1)
-                else:
-                    row[1] = 1; variance_groups.append(2)
-            else:                   # Control
-                if drug == unique_drugs[0]:
-                    row[2] = 1; variance_groups.append(3)
-                else:
-                    row[3] = 1; variance_groups.append(4)
+            if grp == 1:  # Patient
+                idx = 0 if drug == unique_drugs[0] else 1
+            else:         # Control
+                idx = 2 if drug == unique_drugs[0] else 3
+            row[idx] = 1
             design_rows.append(" ".join(map(str,row)))
-
         with open(design_file, 'w') as f:
             f.write("/NumWaves 4\n")
             f.write(f"/NumPoints {n}\n")
             f.write("/Matrix\n")
             f.write("\n".join(design_rows))
 
-        # three contrasts (main effects + interaction)
         contrasts = [
-            "1  1 -1 -1",  # Group   (P vs C)
-            "1 -1  1 -1",  # Drug    (first vs second drug)
+            "1  1 -1 -1",  # Group
+            "1 -1  1 -1",  # Drug
             "1 -1 -1  1",  # Interaction
         ]
         with open(con_file, 'w') as f:
@@ -83,10 +72,15 @@ def create_dummy_design_files(group_info, output_dir):
             f.write("/Matrix\n")
             f.write("\n".join(contrasts))
 
-    # 2) write the _plain_ covsplit file—one integer per line, no headers
-    with open(grp_file, 'w') as f:
+    # --- 2) write plain text covsplit, then convert to VEST ---
+    covtxt = os.path.join(design_dir, 'covsplit.txt')
+    with open(covtxt, 'w') as f:
         for _, grp, _ in group_info:
             f.write(f"{grp}\n")
+
+    # Text2Vest is shipped with FSL; this produces a true VEST file
+    subprocess.run(['Text2Vest', covtxt, grp_file], check=True)
+    os.remove(covtxt)
 
     return design_file, grp_file, con_file
 
