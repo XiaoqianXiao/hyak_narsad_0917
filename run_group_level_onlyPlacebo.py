@@ -17,24 +17,25 @@ results_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'groupLevel', 'Plac
 scrubbed_dir = '/scrubbed_dir'
 workflows_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'groupLevel', 'Placebo')
 
-# Ensure a writable crash‑dump folder
+# Ensure writable crash‑dump folder
 crash_dir = os.path.join(results_dir, 'crashdumps')
-os.makedirs(crash_dir, exist_ok=True)
+os.makedirs(crash_dir, exist_ok = True)
 config.set('logging', 'crashdump_dir', crash_dir)
 
 def run_group_level_wf(task, contrast, analysis_type, paths):
     wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
 
     if analysis_type == 'flameo':
+        # one‑sample FLAMEO (no covsplit)
         wf = wf_flameo(
-            output_dir=paths['result_dir'],
-            use_covsplit=True,
-            name=wf_name
+            output_dir = paths['result_dir'],
+            use_covsplit = False,
+            name = wf_name
         )
     else:
         wf = wf_randomise(
-            output_dir=paths['result_dir'],
-            name=wf_name
+            output_dir = paths['result_dir'],
+            name = wf_name
         )
 
     wf.base_dir = paths['workflow_dir']
@@ -47,25 +48,34 @@ def run_group_level_wf(task, contrast, analysis_type, paths):
 
     if analysis_type == 'flameo':
         wf.inputs.inputnode.var_cope_file = paths['varcope_file']
-        wf.inputs.inputnode.covsplit_file = paths['grp_file']
 
-    wf.run(plugin='Linear')
+    # run serially to avoid multiprocessing crashes
+    wf.run(plugin = 'Linear')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', required=True)
-    parser.add_argument('--contrast', required=True, type=int)
-    parser.add_argument('--analysis_type', default='randomise', choices=['randomise', 'flameo'])
-    parser.add_argument('--base_dir', required=True)
+    parser.add_argument('--task', required = True)
+    parser.add_argument('--contrast', required = True, type = int)
+    parser.add_argument(
+        '--analysis_type',
+        default = 'randomise',
+        choices = ['randomise', 'flameo']
+    )
+    parser.add_argument('--base_dir', required = True)
     args = parser.parse_args()
 
     # Standard MNI brain mask
-    group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
+    group_mask = str(
+        tpl_get(
+            'MNI152NLin2009cAsym',
+            resolution = 2, desc = 'brain', suffix = 'mask'
+        )
+    )
 
     task = args.task
     contrast = args.contrast
 
-    # Correct paths
+    # Build paths
     contrast_dir = os.path.join(results_dir, f"task-{task}", f"cope{contrast}")
     analysis_dir = os.path.join(contrast_dir, "whole_brain")
     workflow_dir = os.path.join(workflows_dir, f"task-{task}", f"cope{contrast}", "whole_brain")
@@ -77,12 +87,11 @@ if __name__ == '__main__':
         'varcope_file': os.path.join(contrast_dir, 'merged_varcope.nii.gz'),
         'design_file':  os.path.join(contrast_dir, 'design_files', 'design.mat'),
         'con_file':     os.path.join(contrast_dir, 'design_files', 'contrast.con'),
-        'grp_file':     os.path.join(contrast_dir, 'design_files', 'design.grp'),
-        'mask_file':    group_mask,
+        'mask_file':    group_mask
     }
 
-    os.makedirs(paths['result_dir'], exist_ok=True)
-    os.makedirs(paths['workflow_dir'], exist_ok=True)
+    os.makedirs(paths['result_dir'], exist_ok = True)
+    os.makedirs(paths['workflow_dir'], exist_ok = True)
 
     run_group_level_wf(
         task,
