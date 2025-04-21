@@ -437,31 +437,54 @@ def flatten_stats(stats):
         return [item for sublist in stats for item in sublist]
     return stats
 
-def wf_flameo(output_dir, name="wf_flameo"):
-    """Workflow for group-level analysis with FLAMEO and GRF clustering (dlh)."""
+
+def wf_flameo(output_dir, use_covsplit=False, name="wf_flameo"):
+    """
+    Workflow for group‐level analysis with FLAMEO + GRF clustering.
+
+    Parameters
+    ----------
+    output_dir : str
+        Base directory for workflow.
+    use_covsplit : bool
+        If True, expect and wire up `covsplit_file` for variance grouping.
+        If False, run FLAMEO in simple one‐sample mode (no covsplit).
+    name : str
+        Name of the workflow.
+    """
     wf = Workflow(name=name, base_dir=output_dir)
 
-    # Input node now has 'covsplit_file' instead of 'grp_file'
+    # 1) Define input fields
+    fields = [
+        "cope_file",
+        "var_cope_file",
+        "mask_file",
+        "design_file",
+        "con_file",
+        "result_dir",
+    ]
+    if use_covsplit:
+        fields.insert(4, "covsplit_file")  # before 'con_file'
+
     inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_file', 'var_cope_file', 'mask_file',
-            'design_file', 'covsplit_file', 'con_file',
-            'result_dir'
-        ]),
-        name='inputnode'
+        IdentityInterface(fields=fields),
+        name="inputnode"
     )
 
-    # FLAMEO: will ignore cov_split_file if it's None
-    flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')
+    # 2) FLAMEO node (FLAME1)
+    flameo = Node(
+        FLAMEO(run_mode="flame1"),
+        name="flameo"
+    )
 
-    # Smoothness estimation for GRF clustering
+    # 3) Smoothness estimation for GRF clustering
     smoothness = MapNode(
         SmoothEstimate(),
-        iterfield=['zstat_file'],
-        name='smoothness'
+        iterfield=["zstat_file"],
+        name="smoothness"
     )
 
-    # Clustering node with dlh
+    # 4) GRF clustering with dlh
     clustering = MapNode(
         Cluster(
             threshold=2.3,
@@ -469,58 +492,81 @@ def wf_flameo(output_dir, name="wf_flameo"):
             out_threshold_file=True,
             out_index_file=True,
             out_localmax_txt_file=True,
-            pthreshold=0.05
+            pthreshold=0.05,
         ),
-        iterfield=['in_file', 'dlh', 'volume'],
-        name='clustering'
+        iterfield=["in_file", "dlh", "volume"],
+        name="clustering"
     )
 
-    # Output node
+    # 5) Collect outputs
     outputnode = Node(
         IdentityInterface(fields=[
-            'zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks'
+            "zstats",
+            "cluster_thresh",
+            "cluster_index",
+            "cluster_peaks",
         ]),
-        name='outputnode'
+        name="outputnode"
     )
 
-    # DataSink to save results
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+    # 6) DataSink
+    datasink = Node(
+        DataSink(base_directory=output_dir),
+        name="datasink"
+    )
 
-    # Connections
+    # --- CONNECT COMMON PORTS ---
     wf.connect([
-        # Inputs → FLAMEO
+        # cope, varcope, mask, design → FLAMEO
         (inputnode, flameo, [
-            ('cope_file',        'cope_file'),
-            ('var_cope_file',    'var_cope_file'),
-            ('mask_file',        'mask_file'),
-            ('design_file',      'design_file'),
-            ('covsplit_file',    'cov_split_file'),
-            ('con_file',         't_con_file'),
+            ("cope_file", "cope_file"),
+            ("var_cope_file", "var_cope_file"),
+            ("mask_file", "mask_file"),
+            ("design_file", "design_file"),
+        ]),
+        # contrasts → FLAMEO
+        (inputnode, flameo, [("con_file", "t_con_file")]),
+    ])
+
+    # --- OPTIONALLY WIRE COVSPLIT ---
+    if use_covsplit:
+        wf.connect(
+            inputnode, "covsplit_file",
+            flameo, "cov_split_file"
+        )
+
+    # --- FINISH FLAMEO BRANCH ---
+    wf.connect([
+        # FLAMEO → smoothness
+        (flameo, smoothness, [
+            (("zstats", lambda lst: lst), "zstat_file")
+        ]),
+        (inputnode, smoothness, [("mask_file", "mask_file")]),
+
+        # FLAMEO + smoothness → clustering
+        (flameo, clustering, [
+            (("zstats", lambda lst: lst), "in_file")
+        ]),
+        (smoothness, clustering, [
+            ("volume", "volume"),
+            ("dlh", "dlh")
         ]),
 
-        # FLAMEO → SmoothEstimate
-        (flameo,   smoothness, [(('zstats', flatten_stats), 'zstat_file')]),
-        (inputnode, smoothness, [('mask_file',      'mask_file')]),
-
-        # FLAMEO & SmoothEstimate → Clustering
-        (flameo,     clustering, [(('zstats', flatten_stats), 'in_file')]),
-        (smoothness, clustering, [('volume', 'volume'),
-                                  ('dlh',    'dlh')]),
-
-        # Collect outputs
-        (flameo,     outputnode, [('zstats', 'zstats')]),
+        # Collect z-stats
+        (flameo, outputnode, [("zstats", "zstats")]),
+        # Collect cluster outputs
         (clustering, outputnode, [
-            ('threshold_file',       'cluster_thresh'),
-            ('index_file',           'cluster_index'),
-            ('localmax_txt_file',    'cluster_peaks')
+            ("threshold_file", "cluster_thresh"),
+            ("index_file", "cluster_index"),
+            ("localmax_txt_file", "cluster_peaks"),
         ]),
 
-        # Send to disk
+        # Sink to disk
         (outputnode, datasink, [
-            ('zstats',         'stats.@zstats'),
-            ('cluster_thresh', 'cluster_results.@thresh'),
-            ('cluster_index',  'cluster_results.@index'),
-            ('cluster_peaks',  'cluster_results.@peaks'),
+            ("zstats", "stats.@zstats"),
+            ("cluster_thresh", "cluster_results.@thresh"),
+            ("cluster_index", "cluster_results.@index"),
+            ("cluster_peaks", "cluster_results.@peaks"),
         ]),
     ])
 
