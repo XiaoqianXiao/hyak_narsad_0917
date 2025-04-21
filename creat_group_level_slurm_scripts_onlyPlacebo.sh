@@ -7,8 +7,8 @@ script_base_dir="${base_dir}/groupLevel/whole_brain/Placebo"
 
 tasks=("phase2" "phase3")
 contrasts=$(seq 1 31)
-#analysis_types=("randomise" "flameo")
-analysis_types=("randomise")
+analysis_types=("randomise" "flameo")
+#analysis_types=("randomise")
 
 mkdir -p "$script_base_dir"
 

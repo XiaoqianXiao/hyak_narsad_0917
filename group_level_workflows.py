@@ -1,11 +1,13 @@
-from nipype.pipeline.engine import Workflow, Node
+from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import Merge, FLIRT
+from nipype.interfaces.fsl import Merge, FLIRT, ExtractROI, FLAMEO, Randomise, ImageMaths, SmoothEstimate, Threshold, Cluster
 from nipype import DataSink
 import os
 import shutil
 import glob
 import subprocess
+import pandas as pd
+import numpy as np
 
 
 def create_dummy_design_files(group_info, output_dir):
@@ -166,24 +168,9 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     ])
 
     return wf
-
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface
-from nipype.interfaces.fsl import ExtractROI, FLAMEO, ImageMaths, SmoothEstimate, Threshold
-from nipype import DataSink
-
-def get_roi_files(roi):
-    import glob
-    import os
-    roi_dir = "/Users/xiaoqianxiao/tool/parcellation/ROIs"
-    roi_pattern = os.path.join(roi_dir, f'*{roi}*_resampled.nii*')  # Use *roi* to match variations
-    roi_files = glob.glob(roi_pattern)  # Expand wildcard into list of files
-    if not roi_files:
-        raise ValueError(f"No ROI files found matching pattern '{roi_pattern}' in {roi_dir}")
-    return roi_files
 # Define a standalone function to flatten nested lists
-def flatten_zstats(zstats):
-    return [item for sublist in zstats for item in sublist]
+
+
 def roi_based_wf(output_dir, name="roi_based_wf"):
     """Workflow for ROI-based analysis using FLAMEO and statistical thresholding."""
     wf = Workflow(name=name, base_dir=output_dir)
@@ -273,169 +260,6 @@ def roi_based_wf(output_dir, name="roi_based_wf"):
     ])
 
     return wf
-
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import FLAMEO, ImageMaths, SmoothEstimate, Threshold, Cluster
-from nipype import DataSink
-import os
-
-def flatten_zstats(zstats):
-    """Flatten a potentially nested list of z-stat file paths into a single list."""
-    if not zstats:  # Handle empty input
-        return []
-    if isinstance(zstats, str):  # If it's a single string, wrap it in a list
-        return [zstats]
-    if isinstance(zstats[0], list):  # If it's a nested list, flatten it
-        return [item for sublist in zstats for item in sublist]
-    return zstats  # Already a flat list of strings
-
-
-def flatten_stats(stats):
-    """Flatten a potentially nested list of stat file paths into a single list."""
-    if not stats:
-        return []
-    if isinstance(stats, str):
-        return [stats]
-    if isinstance(stats[0], list):
-        return [item for sublist in stats for item in sublist]
-    return stats
-
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import Randomise, ImageMaths, SmoothEstimate, Threshold, Cluster
-from nipype import DataSink
-import os
-
-def flatten_stats(stats):
-    """Flatten a potentially nested list of stat file paths into a single list."""
-    if not stats:
-        return []
-    if isinstance(stats, str):
-        return [stats]
-    if isinstance(stats[0], list):
-        return [item for sublist in stats for item in sublist]
-    return stats
-
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import Randomise, ImageMaths, SmoothEstimate, Threshold, Cluster
-from nipype import DataSink
-import os
-
-def flatten_stats(stats):
-    """Flatten a potentially nested list of stat file paths into a single list."""
-    if not stats:
-        return []
-    if isinstance(stats, str):
-        return [stats]
-    if isinstance(stats[0], list):
-        return [item for sublist in stats for item in sublist]
-    return stats
-
-def whole_brain_wf(output_dir, name="whole_brain_wf"):
-    """Workflow for whole-brain analysis with Randomise (TFCE) and clustering (GRF with dlh)."""
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node with whole-brain mask
-    inputnode = Node(IdentityInterface(fields=['cope_file', 'mask_file', 'design_file', 'con_file', 'result_dir']),
-                     name='inputnode')
-
-    # Randomise node (TFCE-based inference)
-    randomise = Node(Randomise(num_perm=10000,  # Number of permutations
-    #randomise = Node(Randomise(num_perm=5000,  # Number of permutations
-                               tfce=True,      # Use TFCE
-                               vox_p_values=True),  # Output voxelwise p-values
-                     name='randomise')
-
-    # Statistical thresholding nodes (optional for TFCE p-values)
-    fdr_ztop = MapNode(ImageMaths(op_string='-ztop', suffix='_pval'),
-                       iterfield=['in_file'],
-                       name='fdr_ztop')
-
-    # Smoothness estimation for GRF clustering
-    smoothness = MapNode(SmoothEstimate(),
-                         iterfield=['zstat_file', 'mask_file'],
-                         name='smoothness')
-
-    # FWE thresholding (optional for t-stats)
-    fwe_thresh = MapNode(Threshold(thresh=0.05, direction='above'),
-                         iterfield=['in_file'],
-                         name='fwe_thresh')
-
-    # Clustering node with dlh for GRF-based correction
-    clustering = MapNode(Cluster(threshold=2.3,  # Z-threshold (e.g., 2.3 or 3.1)
-                                 connectivity=26,  # 3D connectivity
-                                 out_threshold_file=True,
-                                 out_index_file=True,
-                                 out_localmax_txt_file=True,  # Local maxima text file
-                                 pthreshold=0.05),  # Cluster-level FWE threshold
-                         iterfield=['in_file', 'dlh'],
-                         name='clustering')
-
-    # Output node with fields for TFCE and GRF comparison
-    outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files',  # TFCE outputs
-                                                'fdr_thresh', 'fwe_thresh',         # Additional thresholding
-                                                'cluster_thresh', 'cluster_index', 'cluster_peaks']),  # GRF outputs
-                      name='outputnode')
-
-    # DataSink
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
-
-    # Workflow connections
-    wf.connect([
-        # Inputs to Randomise
-        (inputnode, randomise, [('cope_file', 'in_file'),
-                                ('mask_file', 'mask'),
-                                ('design_file', 'design_mat'),
-                                ('con_file', 'tcon')]),
-
-        # Statistical processing (TFCE-related)
-        (randomise, fdr_ztop, [(('t_corrected_p_files', flatten_stats), 'in_file')]),  # Use corrected p-values
-        (randomise, smoothness, [(('tstat_files', flatten_stats), 'zstat_file')]),
-        (inputnode, smoothness, [('mask_file', 'mask_file')]),
-        (randomise, fwe_thresh, [(('tstat_files', flatten_stats), 'in_file')]),
-
-        # Clustering with dlh for GRF correction
-        (randomise, clustering, [(('tstat_files', flatten_stats), 'in_file')]),
-        (smoothness, clustering, [('dlh', 'dlh')]),
-
-        # Outputs to outputnode
-        (randomise, outputnode, [('tstat_files', 'tstat_files'),
-                                 ('t_corrected_p_files', 'tfce_corr_p_files')]),  # Correct output name
-        (fdr_ztop, outputnode, [('out_file', 'fdr_thresh')]),
-        (fwe_thresh, outputnode, [('out_file', 'fwe_thresh')]),
-        (clustering, outputnode, [('threshold_file', 'cluster_thresh'),
-                                  ('index_file', 'cluster_index'),
-                                  ('localmax_txt_file', 'cluster_peaks')]),
-
-        # Outputs to DataSink
-        (outputnode, datasink, [('tstat_files', 'stats.@tstats'),
-                                ('tfce_corr_p_files', 'stats.@tfce_corr_p'),  # TFCE results
-                                ('fdr_thresh', 'fdr_thresh'),
-                                ('fwe_thresh', 'fwe_thresh'),
-                                ('cluster_thresh', 'cluster_results.@thresh'),  # GRF results
-                                ('cluster_index', 'cluster_results.@index'),
-                                ('cluster_peaks', 'cluster_results.@peaks')])
-    ])
-
-    return wf
-
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import FLAMEO, SmoothEstimate, Cluster
-from nipype import DataSink
-import os
-
-def flatten_stats(stats):
-    """Flatten a potentially nested list of stat file paths into a single list."""
-    if not stats:
-        return []
-    if isinstance(stats, str):
-        return [stats]
-    if isinstance(stats[0], list):
-        return [item for sublist in stats for item in sublist]
-    return stats
 
 
 def wf_flameo(output_dir, use_covsplit=False, name="wf_flameo"):
@@ -572,25 +396,6 @@ def wf_flameo(output_dir, use_covsplit=False, name="wf_flameo"):
 
     return wf
 
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import Randomise, ImageMaths
-from nipype import DataSink
-import os
-
-def flatten_stats(stats):
-    """Flatten a potentially nested list of stat file paths into a single list."""
-    if not stats:
-        return []
-    if isinstance(stats, str):
-        return [stats]
-    if isinstance(stats[0], list):
-        return [item for sublist in stats for item in sublist]
-    return stats
-
-def flatten_list(nested):
-    """Flatten a nested list of files into a 1D list."""
-    return [f for sub in nested for f in sub]
 
 def wf_randomise(output_dir, name="wf_randomise"):
     """Workflow for group-level analysis with Randomise + TFCE."""
@@ -672,14 +477,87 @@ def wf_randomise(output_dir, name="wf_randomise"):
     return wf
 
 
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import ImageStats
-from nipype import DataSink
-import os
-import glob
-import pandas as pd
-import numpy as np
+def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", name="wf_ROI"):
+    """Workflow to extract ROI beta values and PSC from fMRI data."""
+    wf = Workflow(name=name, base_dir=output_dir)
+
+    # Input node
+    inputnode = Node(IdentityInterface(fields=['cope_file', 'baseline_file', 'result_dir']),
+                     name='inputnode')
+
+    # Node to get ROI files
+    roi_node = Node(Function(input_names=['roi_dir'], output_names=['roi_files'], function=get_roi_files),
+                    name='roi_node')
+    roi_node.inputs.roi_dir = roi_dir
+
+    # MapNode to extract values for each ROI
+    roi_extract = MapNode(Function(input_names=['cope_file', 'roi_mask', 'baseline_file', 'output_dir'],
+                                   output_names=['beta_file', 'psc_file'],
+                                   function=extract_roi_values),
+                          iterfield=['roi_mask'],
+                          name='roi_extract')
+    roi_extract.inputs.output_dir = os.path.join(output_dir, 'roi_temp')  # Temporary directory
+
+    # Node to combine values into CSV
+    roi_combine = Node(Function(input_names=['beta_files', 'psc_files', 'output_dir'],
+                                output_names=['beta_csv', 'psc_csv'],
+                                function=combine_roi_values),
+                       name='roi_combine')
+    roi_combine.inputs.output_dir = output_dir
+
+    # Output node
+    outputnode = Node(IdentityInterface(fields=['beta_csv', 'psc_csv']),
+                      name='outputnode')
+
+    # DataSink
+    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+
+    # Workflow connections
+    wf.connect([
+        # Inputs to roi_extract
+        (inputnode, roi_extract, [('cope_file', 'cope_file'),
+                                  ('baseline_file', 'baseline_file')]),
+        (roi_node, roi_extract, [('roi_files', 'roi_mask')]),
+
+        # Combine results
+        (roi_extract, roi_combine, [('beta_file', 'beta_files'),
+                                    ('psc_file', 'psc_files')]),
+
+        # Outputs to outputnode
+        (roi_combine, outputnode, [('beta_csv', 'beta_csv'),
+                                   ('psc_csv', 'psc_csv')]),
+
+        # Outputs to DataSink
+        (outputnode, datasink, [('beta_csv', 'roi_results.@beta_csv'),
+                                ('psc_csv', 'roi_results.@psc_csv')])
+    ])
+
+    return wf
+
+def flatten_zstats(zstats):
+    """Flatten a potentially nested list of z-stat file paths into a single list."""
+    if not zstats:  # Handle empty input
+        return []
+    if isinstance(zstats, str):  # If it's a single string, wrap it in a list
+        return [zstats]
+    if isinstance(zstats[0], list):  # If it's a nested list, flatten it
+        return [item for sublist in zstats for item in sublist]
+    return zstats  # Already a flat list of strings
+
+def flatten_stats(stats):
+    """Flatten a potentially nested list of stat file paths into a single list."""
+    if not stats:
+        return []
+    if isinstance(stats, str):
+        return [stats]
+    if isinstance(stats[0], list):
+        return [item for sublist in stats for item in sublist]
+    return stats
+
+def flatten_list(nested):
+    """Flatten a nested list of files into a 1D list."""
+    return [f for sub in nested for f in sub]
+
 
 
 def get_roi_files(roi_dir):
@@ -764,61 +642,3 @@ def combine_roi_values(beta_files, psc_files, output_dir):
         psc_df.to_csv(psc_csv)
         return beta_csv, psc_csv
     return beta_csv, None
-
-
-def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", name="wf_ROI"):
-    """Workflow to extract ROI beta values and PSC from fMRI data."""
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node
-    inputnode = Node(IdentityInterface(fields=['cope_file', 'baseline_file', 'result_dir']),
-                     name='inputnode')
-
-    # Node to get ROI files
-    roi_node = Node(Function(input_names=['roi_dir'], output_names=['roi_files'], function=get_roi_files),
-                    name='roi_node')
-    roi_node.inputs.roi_dir = roi_dir
-
-    # MapNode to extract values for each ROI
-    roi_extract = MapNode(Function(input_names=['cope_file', 'roi_mask', 'baseline_file', 'output_dir'],
-                                   output_names=['beta_file', 'psc_file'],
-                                   function=extract_roi_values),
-                          iterfield=['roi_mask'],
-                          name='roi_extract')
-    roi_extract.inputs.output_dir = os.path.join(output_dir, 'roi_temp')  # Temporary directory
-
-    # Node to combine values into CSV
-    roi_combine = Node(Function(input_names=['beta_files', 'psc_files', 'output_dir'],
-                                output_names=['beta_csv', 'psc_csv'],
-                                function=combine_roi_values),
-                       name='roi_combine')
-    roi_combine.inputs.output_dir = output_dir
-
-    # Output node
-    outputnode = Node(IdentityInterface(fields=['beta_csv', 'psc_csv']),
-                      name='outputnode')
-
-    # DataSink
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
-
-    # Workflow connections
-    wf.connect([
-        # Inputs to roi_extract
-        (inputnode, roi_extract, [('cope_file', 'cope_file'),
-                                  ('baseline_file', 'baseline_file')]),
-        (roi_node, roi_extract, [('roi_files', 'roi_mask')]),
-
-        # Combine results
-        (roi_extract, roi_combine, [('beta_file', 'beta_files'),
-                                    ('psc_file', 'psc_files')]),
-
-        # Outputs to outputnode
-        (roi_combine, outputnode, [('beta_csv', 'beta_csv'),
-                                   ('psc_csv', 'psc_csv')]),
-
-        # Outputs to DataSink
-        (outputnode, datasink, [('beta_csv', 'roi_results.@beta_csv'),
-                                ('psc_csv', 'roi_results.@psc_csv')])
-    ])
-
-    return wf
