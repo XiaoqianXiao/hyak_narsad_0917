@@ -8,7 +8,6 @@ from templateflow.api import get as tpl_get
 config.set('execution', 'remove_unnecessary_outputs', 'false')
 logging.update_logging(config)
 
-# ----------------------------
 # Define directories
 root_dir = os.getenv('DATA_DIR', '/data')
 project_name = 'NARSAD'
@@ -20,17 +19,10 @@ workflows_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'groupLev
 
 # Ensure a writable crash‑dump folder
 crash_dir = os.path.join(results_dir, 'crashdumps')
-os.makedirs(crash_dir, exist_ok = True)
+os.makedirs(crash_dir, exist_ok=True)
 config.set('logging', 'crashdump_dir', crash_dir)
 
-# ----------------------------
 def run_group_level_wf(task, contrast, analysis_type, paths):
-    """
-    task, contrast: strings/ints
-    analysis_type: 'randomise' or 'flameo'
-    paths: dict with keys 'result_dir', 'workflow_dir', 'cope_file',
-           'varcope_file', 'design_file', 'con_file', 'grp_file', 'mask_file'
-    """
     wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
 
     if analysis_type == 'flameo':
@@ -47,7 +39,6 @@ def run_group_level_wf(task, contrast, analysis_type, paths):
 
     wf.base_dir = paths['workflow_dir']
 
-    # Common inputs
     wf.inputs.inputnode.cope_file = paths['cope_file']
     wf.inputs.inputnode.mask_file = paths['mask_file']
     wf.inputs.inputnode.design_file = paths['design_file']
@@ -58,58 +49,40 @@ def run_group_level_wf(task, contrast, analysis_type, paths):
         wf.inputs.inputnode.var_cope_file = paths['varcope_file']
         wf.inputs.inputnode.covsplit_file = paths['grp_file']
 
-    # Run everything serially
     wf.run(plugin='Linear')
 
-# -----------------------------
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task', required = True)
-    parser.add_argument('--contrast', required = True, type = int)
-    parser.add_argument(
-        '--analysis_type',
-        default = 'randomise',
-        choices = ['randomise', 'flameo']
-    )
-    parser.add_argument('--base_dir', required = True)
+    parser.add_argument('--task', required=True)
+    parser.add_argument('--contrast', required=True, type=int)
+    parser.add_argument('--analysis_type', default='randomise', choices=['randomise', 'flameo'])
+    parser.add_argument('--base_dir', required=True)
     args = parser.parse_args()
 
-    # Get standard MNI brain mask
-    group_mask = str(
-        tpl_get(
-            'MNI152NLin2009cAsym',
-            resolution=2, desc='brain', suffix='mask'
-        )
-    )
+    # Standard MNI brain mask
+    group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
 
-    # Build the paths dict
     task = args.task
     contrast = args.contrast
-    result_dir = os.path.join(
-        results_dir,
-        f"task-{task}",
-        f"cope{contrast}",
-        "whole_brain"
-    )
-    workflow_dir = os.path.join(
-        workflows_dir,
-        f"task-{task}",
-        f"cope{contrast}",
-        "whole_brain"
-    )
+
+    # Correct paths
+    contrast_dir = os.path.join(results_dir, f"task-{task}", f"cope{contrast}")
+    analysis_dir = os.path.join(contrast_dir, "whole_brain")
+    workflow_dir = os.path.join(workflows_dir, f"task-{task}", f"cope{contrast}", "whole_brain")
+
     paths = {
-        'result_dir': result_dir,
+        'result_dir':   analysis_dir,
         'workflow_dir': workflow_dir,
-        'cope_file': os.path.join(result_dir, 'merged_cope.nii.gz'),
-        'varcope_file': os.path.join(result_dir, 'merged_varcope.nii.gz'),
-        'design_file': os.path.join(result_dir, 'design_files', 'design.mat'),
-        'con_file': os.path.join(result_dir, 'design_files', 'contrast.con'),
-        'grp_file': os.path.join(result_dir, 'design_files', 'design.grp'),
-        'mask_file': group_mask,
+        'cope_file':    os.path.join(contrast_dir, 'merged_cope.nii.gz'),
+        'varcope_file': os.path.join(contrast_dir, 'merged_varcope.nii.gz'),
+        'design_file':  os.path.join(contrast_dir, 'design_files', 'design.mat'),
+        'con_file':     os.path.join(contrast_dir, 'design_files', 'contrast.con'),
+        'grp_file':     os.path.join(contrast_dir, 'design_files', 'design.grp'),
+        'mask_file':    group_mask,
     }
 
-    os.makedirs(paths['result_dir'], exist_ok = True)
-    os.makedirs(paths['workflow_dir'], exist_ok = True)
+    os.makedirs(paths['result_dir'], exist_ok=True)
+    os.makedirs(paths['workflow_dir'], exist_ok=True)
 
     run_group_level_wf(
         task,
