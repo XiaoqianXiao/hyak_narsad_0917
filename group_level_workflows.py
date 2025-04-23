@@ -300,53 +300,40 @@ def roi_based_wf(output_dir, name="roi_based_wf"):
     return wf
 
 
-def wf_flameo(output_dir, use_covsplit=False, name="wf_flameo"):
-    """
-    Workflow for group‐level analysis with FLAMEO + GRF clustering.
+def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
+    """Workflow for group-level analysis with FLAMEO and GRF clustering (no flatten_stats)."""
+    from nipype.pipeline.engine import Workflow
+    from nipype import Node, MapNode
+    from nipype.interfaces.utility import IdentityInterface
+    from nipype.interfaces.io import DataSink
+    from nipype.interfaces.fsl.model import FLAMEO
+    from nipype.interfaces.fsl.model import SmoothEstimate, Cluster
 
-    Parameters
-    ----------
-    output_dir : str
-        Base directory for workflow.
-    use_covsplit : bool
-        If True, expect and wire up `covsplit_file` for variance grouping.
-        If False, run FLAMEO in simple one‐sample mode (no covsplit).
-    name : str
-        Name of the workflow.
-    """
     wf = Workflow(name=name, base_dir=output_dir)
 
-    # 1) Define input fields
-    fields = [
-        "cope_file",
-        "var_cope_file",
-        "mask_file",
-        "design_file",
-        "con_file",
-        "result_dir",
-    ]
-    if use_covsplit:
-        fields.insert(4, "covsplit_file")  # before 'con_file'
-
+    # Input node
     inputnode = Node(
-        IdentityInterface(fields=fields),
-        name="inputnode"
+        IdentityInterface(fields=[
+            'cope_file', 'var_cope_file', 'mask_file',
+            'design_file', 'grp_file', 'con_file', 'result_dir'
+        ]),
+        name='inputnode'
     )
 
-    # 2) FLAMEO node (FLAME1)
+    # FLAMEO node
     flameo = Node(
-        FLAMEO(run_mode="flame1"),
-        name="flameo"
+        FLAMEO(run_mode='flame1'),
+        name='flameo'
     )
 
-    # 3) Smoothness estimation for GRF clustering
+    # Smoothness estimation node
     smoothness = MapNode(
         SmoothEstimate(),
-        iterfield=["zstat_file"],
-        name="smoothness"
+        iterfield=['zstat_file'],  # Now connects directly
+        name='smoothness'
     )
 
-    # 4) GRF clustering with dlh
+    # Clustering node with GRF
     clustering = MapNode(
         Cluster(
             threshold=2.3,
@@ -354,82 +341,62 @@ def wf_flameo(output_dir, use_covsplit=False, name="wf_flameo"):
             out_threshold_file=True,
             out_index_file=True,
             out_localmax_txt_file=True,
-            pthreshold=0.05,
+            pthreshold=0.05
         ),
-        iterfield=["in_file", "dlh", "volume"],
-        name="clustering"
+        iterfield=['in_file', 'dlh', 'volume'],
+        name='clustering'
     )
 
-    # 5) Collect outputs
+    # Output node
     outputnode = Node(
         IdentityInterface(fields=[
-            "zstats",
-            "cluster_thresh",
-            "cluster_index",
-            "cluster_peaks",
+            'zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks'
         ]),
-        name="outputnode"
+        name='outputnode'
     )
 
-    # 6) DataSink
+    # DataSink
     datasink = Node(
         DataSink(base_directory=output_dir),
-        name="datasink"
+        name='datasink'
     )
 
-    # --- CONNECT COMMON PORTS ---
+    # Workflow connections
     wf.connect([
-        # cope, varcope, mask, design → FLAMEO
+        # FLAMEO inputs
         (inputnode, flameo, [
-            ("cope_file", "cope_file"),
-            ("var_cope_file", "var_cope_file"),
-            ("mask_file", "mask_file"),
-            ("design_file", "design_file"),
-        ]),
-        # contrasts → FLAMEO
-        (inputnode, flameo, [("con_file", "t_con_file")]),
-    ])
-
-    # --- OPTIONALLY WIRE COVSPLIT ---
-    if use_covsplit:
-        wf.connect(
-            inputnode, "covsplit_file",
-            flameo, "cov_split_file"
-        )
-
-    # --- FINISH FLAMEO BRANCH ---
-    wf.connect([
-        # FLAMEO → smoothness
-        (flameo, smoothness, [
-            (("zstats", lambda lst: lst), "zstat_file")
-        ]),
-        (inputnode, smoothness, [("mask_file", "mask_file")]),
-
-        # FLAMEO + smoothness → clustering
-        (flameo, clustering, [
-            (("zstats", lambda lst: lst), "in_file")
-        ]),
-        (smoothness, clustering, [
-            ("volume", "volume"),
-            ("dlh", "dlh")
+            ('cope_file', 'cope_file'),
+            ('var_cope_file', 'var_cope_file'),
+            ('mask_file', 'mask_file'),
+            ('design_file', 'design_file'),
+            ('grp_file', 'covsplit_file'),  # 🔧 always wired
+            ('con_file', 't_con_file')
         ]),
 
-        # Collect z-stats
-        (flameo, outputnode, [("zstats", "zstats")]),
-        # Collect cluster outputs
+        # Smoothness: directly map zstats
+        (flameo, smoothness, [('zstats', 'zstat_file')]),
+        (inputnode, smoothness, [('mask_file', 'mask_file')]),
+
+        # Clustering: directly map zstats
+        (flameo, clustering, [('zstats', 'in_file')]),
+        (smoothness, clustering, [('volume', 'volume')]),
+        (smoothness, clustering, [('dlh', 'dlh')]),
+
+        # Outputs
+        (flameo, outputnode, [('zstats', 'zstats')]),
         (clustering, outputnode, [
-            ("threshold_file", "cluster_thresh"),
-            ("index_file", "cluster_index"),
-            ("localmax_txt_file", "cluster_peaks"),
+            ('threshold_file', 'cluster_thresh'),
+            ('index_file', 'cluster_index'),
+            ('localmax_txt_file', 'cluster_peaks')
         ]),
 
-        # Sink to disk
+        # DataSink
         (outputnode, datasink, [
-            ("zstats", "stats.@zstats"),
-            ("cluster_thresh", "cluster_results.@thresh"),
-            ("cluster_index", "cluster_results.@index"),
-            ("cluster_peaks", "cluster_results.@peaks"),
-        ]),
+            ('zstats', 'stats.@zstats'),
+            ('cluster_thresh', 'cluster_results.@thresh'),
+            ('cluster_index', 'cluster_results.@index'),
+            ('cluster_peaks', 'cluster_results.@peaks')
+        ])
     ])
 
     return wf
