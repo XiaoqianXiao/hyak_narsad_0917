@@ -404,13 +404,6 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
 
 def wf_randomise(output_dir, name="wf_randomise"):
     """Workflow for group-level analysis with Randomise + TFCE."""
-    from nipype.pipeline.engine import Workflow, Node, MapNode
-    from nipype.interfaces.utility import IdentityInterface
-    from nipype.interfaces.fsl.model import Randomise
-    from nipype.interfaces.fsl.maths import ImageMaths
-    from nipype.interfaces.io import DataSink
-    from nipype.utils.misc import flatten_list
-
     wf = Workflow(name=name, base_dir=output_dir)
 
     # 1) Inputs: cope, mask, design.mat, contrast.con
