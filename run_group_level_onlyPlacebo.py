@@ -20,16 +20,16 @@ workflows_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'groupLev
 # Ensure writable crash-dump folder
 crash_dir = os.path.join(results_dir, 'crashdumps')
 os.makedirs(crash_dir, exist_ok = True)
-config.set('logging', 'crashdump_dir', crash_dir)
+config.set('logging', 'crashdump_dir', crash_dir)    # 🔧 Redirect crash dumps to a writable directory
 
 def run_group_level_wf(task, contrast, analysis_type, paths):
     wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
 
     if analysis_type == 'flameo':
-        # one-sample FLAMEO (no covsplit)
+        # 🔧 Always invoke FLAMEO with covsplit support
         wf = wf_flameo(
             output_dir = paths['result_dir'],
-            use_covsplit = False,
+            use_covsplit = True,    # 🔧 Enable covsplit_file even for one-sample
             name = wf_name
         )
     else:
@@ -40,16 +40,18 @@ def run_group_level_wf(task, contrast, analysis_type, paths):
 
     wf.base_dir = paths['workflow_dir']
 
-    wf.inputs.inputnode.cope_file = paths['cope_file']
-    wf.inputs.inputnode.mask_file = paths['mask_file']
-    wf.inputs.inputnode.design_file = paths['design_file']
-    wf.inputs.inputnode.con_file = paths['con_file']
-    wf.inputs.inputnode.result_dir = paths['result_dir']
+    # Common inputs
+    wf.inputs.inputnode.cope_file    = paths['cope_file']
+    wf.inputs.inputnode.mask_file    = paths['mask_file']
+    wf.inputs.inputnode.design_file  = paths['design_file']
+    wf.inputs.inputnode.con_file     = paths['con_file']
+    wf.inputs.inputnode.result_dir   = paths['result_dir']
 
     if analysis_type == 'flameo':
-        wf.inputs.inputnode.var_cope_file = paths['varcope_file']
+        wf.inputs.inputnode.var_cope_file  = paths['varcope_file']
+        wf.inputs.inputnode.covsplit_file  = paths['grp_file']  # 🔧 Wire in the covsplit VEST file
 
-    # run serially to avoid multiprocessing crashes
+    # 🔧 Run serially to avoid multiprocessing crashes
     wf.run(plugin = 'Linear')
 
 if __name__ == '__main__':
@@ -72,7 +74,7 @@ if __name__ == '__main__':
         )
     )
 
-    task = args.task
+    task     = args.task
     contrast = args.contrast
 
     # Build paths
@@ -87,8 +89,8 @@ if __name__ == '__main__':
         'varcope_file':  os.path.join(contrast_dir, 'merged_varcope.nii.gz'),
         'design_file':   os.path.join(contrast_dir, 'design_files', 'design.mat'),
         'con_file':      os.path.join(contrast_dir, 'design_files', 'contrast.con'),
-        'grp_file':      os.path.join(contrast_dir, 'design_files', 'design.grp'),
-        'mask_file':     group_mask
+        'grp_file':      os.path.join(contrast_dir, 'design_files', 'design.grp'),  # 🔧 Ensure this VEST exists
+        'mask_file':     group_mask,
     }
 
     os.makedirs(paths['result_dir'], exist_ok = True)
