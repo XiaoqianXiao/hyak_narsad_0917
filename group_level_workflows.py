@@ -329,7 +329,7 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
     # Smoothness estimation node
     smoothness = MapNode(
         SmoothEstimate(),
-        iterfield=['zstat_file'],  # Now connects directly
+        iterfield=['zstat_file'],
         name='smoothness'
     )
 
@@ -365,37 +365,37 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
     wf.connect([
         # FLAMEO inputs
         (inputnode, flameo, [
-            ('cope_file', 'cope_file'),
-            ('var_cope_file', 'var_cope_file'),
-            ('mask_file', 'mask_file'),
-            ('design_file', 'design_file'),
-            ('grp_file', 'covsplit_file'),  # 🔧 always wired
-            ('con_file', 't_con_file')
+            ('cope_file',     'cope_file'),
+            ('var_cope_file', 'varcope_file'),
+            ('mask_file',     'mask_file'),
+            ('design_file',   'design_file'),
+            ('grp_file',      'cov_split_file'),  # 🔧 corrected to cov_split_file
+            ('con_file',      't_con_file')
         ]),
 
-        # Smoothness: directly map zstats
-        (flameo, smoothness, [('zstats', 'zstat_file')]),
-        (inputnode, smoothness, [('mask_file', 'mask_file')]),
+        # Smoothness estimation
+        (flameo,     smoothness, [('zstats', 'zstat_file')]),
+        (inputnode,  smoothness, [('mask_file', 'mask_file')]),
 
-        # Clustering: directly map zstats
-        (flameo, clustering, [('zstats', 'in_file')]),
-        (smoothness, clustering, [('volume', 'volume')]),
-        (smoothness, clustering, [('dlh', 'dlh')]),
+        # Clustering
+        (flameo,      clustering, [('zstats', 'in_file')]),
+        (smoothness,  clustering, [('volume', 'volume')]),
+        (smoothness,  clustering, [('dlh', 'dlh')]),
 
-        # Outputs
-        (flameo, outputnode, [('zstats', 'zstats')]),
-        (clustering, outputnode, [
-            ('threshold_file', 'cluster_thresh'),
-            ('index_file', 'cluster_index'),
-            ('localmax_txt_file', 'cluster_peaks')
+        # Collect outputs
+        (flameo,      outputnode, [('zstats', 'zstats')]),
+        (clustering,  outputnode, [
+            ('threshold_file',     'cluster_thresh'),
+            ('index_file',         'cluster_index'),
+            ('localmax_txt_file',  'cluster_peaks')
         ]),
 
-        # DataSink
+        # Send to DataSink
         (outputnode, datasink, [
-            ('zstats', 'stats.@zstats'),
+            ('zstats',         'stats.@zstats'),
             ('cluster_thresh', 'cluster_results.@thresh'),
-            ('cluster_index', 'cluster_results.@index'),
-            ('cluster_peaks', 'cluster_results.@peaks')
+            ('cluster_index',  'cluster_results.@index'),
+            ('cluster_peaks',  'cluster_results.@peaks')
         ])
     ])
 
