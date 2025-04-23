@@ -42,13 +42,11 @@ def run_group_level_wf(task, contrast, analysis_type, paths, dry_run=False):
     wf.inputs.inputnode.design_file = paths['design_file']
     wf.inputs.inputnode.con_file    = paths['con_file']
 
-    # 🔧 Only wire result_dir if inputnode actually defines it
-    if wf.inputs.inputnode.inputs.has_trait('result_dir'):
-        wf.inputs.inputnode.result_dir = paths['result_dir']
-
     if analysis_type == 'flameo':
         wf.inputs.inputnode.var_cope_file = paths['varcope_file']
         wf.inputs.inputnode.grp_file      = paths['grp_file']
+        # 🔧 Only FLAMEO needs result_dir on its inputnode
+        wf.inputs.inputnode.result_dir    = paths['result_dir']
 
     if dry_run:
         dotfile = os.path.join(paths['workflow_dir'], f'{wf_name}.dot')
@@ -56,21 +54,24 @@ def run_group_level_wf(task, contrast, analysis_type, paths, dry_run=False):
         print(f"[dry-run] graph saved to {dotfile}.png")
         return
 
-    wf.run(plugin = 'Linear')
+    wf.run(plugin='Linear')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--task',         required = True)
-    parser.add_argument('--contrast',     required = True, type = int)
+    parser.add_argument('--task',         required=True)
+    parser.add_argument('--contrast',     required=True, type=int)
     parser.add_argument(
         '--analysis_type',
-        default   = 'randomise',
-        choices   = ['randomise', 'flameo']
+        default='randomise',
+        choices=['randomise', 'flameo']
     )
-    parser.add_argument('--base_dir',     required = True)
-    parser.add_argument('--dry_run',      action = 'store_true',
-                        help   = "Build workflow graph and exit without running")
+    parser.add_argument('--base_dir',     required=True)
+    parser.add_argument(
+        '--dry_run',
+        action='store_true',
+        help="Build workflow graph and exit without running"
+    )
     args = parser.parse_args()
 
     # Override roots in dry_run
@@ -82,18 +83,18 @@ if __name__ == '__main__':
     if not args.dry_run:
         crash_dir = os.path.join(results_dir, 'crashdumps')
         try:
-            os.makedirs(crash_dir, exist_ok = True)
+            os.makedirs(crash_dir, exist_ok=True)
             config.set('logging', 'crashdump_dir', crash_dir)
         except OSError:
-            print(f"[warning] Cannot create crash_dir at {crash_dir}, skipping crash-dump setup")
+            print(f"[warning] cannot create crash_dir at {crash_dir}, skipping setup")
 
     # Standard MNI brain mask
     group_mask = str(
         tpl_get(
             'MNI152NLin2009cAsym',
-            resolution = 2,
-            desc       = 'brain',
-            suffix     = 'mask'
+            resolution=2,
+            desc='brain',
+            suffix='mask'
         )
     )
 
@@ -103,32 +104,31 @@ if __name__ == '__main__':
     # Build per-contrast paths
     contrast_dir  = os.path.join(results_dir, f"task-{task}", f"cope{contrast}")
     analysis_dir  = os.path.join(contrast_dir, 'whole_brain')
-    workflow_dir  = os.path.join(workflows_dir,
-                                 f"task-{task}",
-                                 f"cope{contrast}",
-                                 'whole_brain')
+    workflow_dir  = os.path.join(
+        workflows_dir,
+        f"task-{task}",
+        f"cope{contrast}",
+        'whole_brain'
+    )
 
     paths = {
         'result_dir':   analysis_dir,
         'workflow_dir': workflow_dir,
         'cope_file':    os.path.join(contrast_dir, 'merged_cope.nii.gz'),
         'varcope_file': os.path.join(contrast_dir, 'merged_varcope.nii.gz'),
-        'design_file':  os.path.join(contrast_dir,
-                                     'design_files', 'design.mat'),
-        'con_file':     os.path.join(contrast_dir,
-                                     'design_files', 'contrast.con'),
-        'grp_file':     os.path.join(contrast_dir,
-                                     'design_files', 'design.grp'),
+        'design_file':  os.path.join(contrast_dir, 'design_files', 'design.mat'),
+        'con_file':     os.path.join(contrast_dir, 'design_files', 'contrast.con'),
+        'grp_file':     os.path.join(contrast_dir, 'design_files', 'design.grp'),
         'mask_file':    group_mask,
     }
 
-    os.makedirs(paths['result_dir'],   exist_ok = True)
-    os.makedirs(paths['workflow_dir'], exist_ok = True)
+    os.makedirs(paths['result_dir'],   exist_ok=True)
+    os.makedirs(paths['workflow_dir'], exist_ok=True)
 
     run_group_level_wf(
         task,
         contrast,
         args.analysis_type,
         paths,
-        dry_run = args.dry_run
+        dry_run=args.dry_run
     )
