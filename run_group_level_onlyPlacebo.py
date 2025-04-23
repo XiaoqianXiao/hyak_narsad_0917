@@ -8,37 +8,22 @@ from templateflow.api import get as tpl_get
 config.set('execution', 'remove_unnecessary_outputs', 'false')
 logging.update_logging(config)
 
-# Define directories
-root_dir       = os.getenv('DATA_DIR', '/data')
-project_name   = 'NARSAD'
-data_dir       = os.path.join(root_dir, project_name, 'MRI')
-derivatives_dir= os.path.join(data_dir, 'derivatives')
-results_dir    = os.path.join(derivatives_dir, 'fMRI_analysis', 'groupLevel', 'Placebo')
-scrubbed_dir   = '/scrubbed_dir'
-workflows_dir  = os.path.join(scrubbed_dir, project_name, 'work_flows', 'groupLevel', 'Placebo')
+# Define directories (overridden when dry_run)
+root_dir        = os.getenv('DATA_DIR', '/data')
+project_name    = 'NARSAD'
+data_dir        = os.path.join(root_dir, project_name, 'MRI')
+derivatives_dir = os.path.join(data_dir, 'derivatives')
+results_dir     = os.path.join(derivatives_dir, 'fMRI_analysis', 'groupLevel', 'Placebo')
+scrubbed_dir    = '/scrubbed_dir'
+workflows_dir   = os.path.join(scrubbed_dir, project_name, 'work_flows', 'groupLevel', 'Placebo')
 
-# Ensure writable crash-dump folder
-crash_dir      = os.path.join(results_dir, 'crashdumps')
-os.makedirs(crash_dir, exist_ok = True)
-config.set('logging', 'crashdump_dir', crash_dir)      # 🔧 redirect crash dumps
-
-def run_group_level_wf(task, contrast, analysis_type, paths):
-    wf_name     = f"wf_{analysis_type}_{task}_cope{contrast}"
-    design_file = paths['design_file']
-
-    # 🔧 read NumWaves from design.mat to decide on covsplit
-    num_waves = 1
-    with open(design_file) as f:
-        for line in f:
-            if line.startswith('/NumWaves'):
-                num_waves = int(line.split()[1])
-                break
-    use_covsplit = (num_waves > 1)  # 🔧 only True for multi-EV designs
+def run_group_level_wf(task, contrast, analysis_type, paths, dry_run=False):
+    wf_name = f"wf_{analysis_type}_{task}_cope{contrast}"
 
     if analysis_type == 'flameo':
         wf = wf_flameo(
             output_dir   = paths['result_dir'],
-            use_covsplit = use_covsplit,  # 🔧 dynamic covsplit
+            use_covsplit = True,
             name         = wf_name
         )
     else:
@@ -49,20 +34,27 @@ def run_group_level_wf(task, contrast, analysis_type, paths):
 
     wf.base_dir = paths['workflow_dir']
 
-    # common inputs
-    wf.inputs.inputnode.cope_file   = paths['cope_file']
-    wf.inputs.inputnode.mask_file   = paths['mask_file']
-    wf.inputs.inputnode.design_file = design_file
-    wf.inputs.inputnode.con_file    = paths['con_file']
-    wf.inputs.inputnode.result_dir  = paths['result_dir']
+    # Common inputs
+    wf.inputs.inputnode.cope_file    = paths['cope_file']
+    wf.inputs.inputnode.mask_file    = paths['mask_file']
+    wf.inputs.inputnode.design_file  = paths['design_file']
+    wf.inputs.inputnode.con_file     = paths['con_file']
+    wf.inputs.inputnode.result_dir   = paths['result_dir']
 
     if analysis_type == 'flameo':
         wf.inputs.inputnode.var_cope_file = paths['varcope_file']
-        if use_covsplit:
-            wf.inputs.inputnode.covsplit_file = paths['grp_file']  # 🔧 only wire when needed
+        wf.inputs.inputnode.covsplit_file = paths['grp_file']  # 🔧 ensure covsplit is always wired
 
-    # 🔧 run serially to avoid process-pool crashes
+    if dry_run:
+        # 🔧 write workflow graph without running analysis
+        dotfile = os.path.join(paths['workflow_dir'], f'{wf_name}.dot')
+        wf.write_graph(graph2use='colored', format='png', dotfilename=dotfile)
+        print(f"[dry-run] graph saved to {dotfile}.png")
+        return
+
+    # 🔧 run serially to avoid multiprocessing crashes
     wf.run(plugin = 'Linear')
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -73,8 +65,24 @@ if __name__ == '__main__':
         default   = 'randomise',
         choices   = ['randomise', 'flameo']
     )
-    parser.add_argument('--base_dir',     required = True)
-    args   = parser.parse_args()
+    parser.add_argument('--base_dir',     required = True)            # 🔧 new
+    parser.add_argument('--dry_run',      action = 'store_true',
+                        help   = "Build workflow graph and exit without running")
+    args = parser.parse_args()
+
+    # 🔧 override output roots for dry_run
+    if args.dry_run:
+        results_dir   = args.base_dir
+        workflows_dir = args.base_dir
+
+    # 🔧 crash‐dump setup only when not dry_run
+    if not args.dry_run:
+        crash_dir = os.path.join(results_dir, 'crashdumps')
+        try:
+            os.makedirs(crash_dir, exist_ok = True)
+            config.set('logging', 'crashdump_dir', crash_dir)
+        except OSError:
+            print(f"[warning] Cannot create crash_dir at {crash_dir}, skipping crash-dump setup")
 
     # Standard MNI brain mask
     group_mask = str(
@@ -103,6 +111,7 @@ if __name__ == '__main__':
         'mask_file':     group_mask,
     }
 
+    # 🔧 ensure local writeable dirs
     os.makedirs(paths['result_dir'],   exist_ok = True)
     os.makedirs(paths['workflow_dir'], exist_ok = True)
 
@@ -110,5 +119,6 @@ if __name__ == '__main__':
         task,
         contrast,
         args.analysis_type,
-        paths
+        paths,
+        dry_run = args.dry_run
     )
