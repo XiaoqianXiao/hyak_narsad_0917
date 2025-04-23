@@ -41,11 +41,12 @@ def run_group_level_wf(task, contrast, analysis_type, paths, dry_run=False):
     wf.inputs.inputnode.mask_file   = paths['mask_file']
     wf.inputs.inputnode.design_file = paths['design_file']
     wf.inputs.inputnode.con_file    = paths['con_file']
-    wf.inputs.inputnode.result_dir  = paths['result_dir']
+    # 🔧 only wire result_dir when the inputnode actually defines that trait
+    if 'result_dir' in wf.inputs.inputnode.inputs.traits():
+        wf.inputs.inputnode.result_dir = paths['result_dir']
 
     if analysis_type == 'flameo':
         wf.inputs.inputnode.var_cope_file = paths['varcope_file']
-        # 🔧 Corrected here: set grp_file, not covsplit_file
         wf.inputs.inputnode.grp_file      = paths['grp_file']
 
     if dry_run:
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         results_dir   = args.base_dir
         workflows_dir = args.base_dir
 
-    # Crash‐dump setup only when running real analysis
+    # Crash-dump setup only when running real analysis
     if not args.dry_run:
         crash_dir = os.path.join(results_dir, 'crashdumps')
         try:

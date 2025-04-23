@@ -404,6 +404,13 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
 
 def wf_randomise(output_dir, name="wf_randomise"):
     """Workflow for group-level analysis with Randomise + TFCE."""
+    from nipype.pipeline.engine import Workflow, Node, MapNode
+    from nipype.interfaces.utility import IdentityInterface
+    from nipype.interfaces.fsl.model import Randomise
+    from nipype.interfaces.fsl.maths import ImageMaths
+    from nipype.interfaces.io import DataSink
+    from nipype.utils.misc import flatten_list
+
     wf = Workflow(name=name, base_dir=output_dir)
 
     # 1) Inputs: cope, mask, design.mat, contrast.con
@@ -417,7 +424,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
         name='inputnode'
     )
 
-    # 2) Randomise: TFCE + voxelwise p‑values
+    # 2) Randomise: TFCE + voxelwise p-values
     randomise = Node(
         Randomise(
             num_perm=10000,
@@ -437,9 +444,9 @@ def wf_randomise(output_dir, name="wf_randomise"):
     # 4) Collect everything
     outputnode = Node(
         IdentityInterface(fields=[
-            'tstat_files',         # raw t‑stats
-            'tfce_corr_p_files',   # TFCE‑corrected p’s
-            'z_thresh_files',      # optional z‑conversions
+            'tstat_files',         # raw t-stats
+            'tfce_corr_p_files',   # TFCE-corrected p’s
+            'z_thresh_files',      # z-transformed p-stats
         ]),
         name='outputnode'
     )
@@ -457,7 +464,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
             ('con_file',    'tcon'),
         ]),
 
-        # b) take TFCE‐corrected p’s → z‑scores
+        # b) take TFCE‐corrected p’s → z-scores
         (randomise, fdr_ztop, [
             (('t_corrected_p_files', flatten_list), 'in_file')
         ]),
@@ -480,6 +487,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
     ])
 
     return wf
+
 
 
 def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", name="wf_ROI"):
