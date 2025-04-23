@@ -404,6 +404,12 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
 
 def wf_randomise(output_dir, name="wf_randomise"):
     """Workflow for group-level analysis with Randomise + TFCE."""
+    from nipype.pipeline.engine import Workflow, Node, MapNode
+    from nipype.interfaces.utility import IdentityInterface
+    from nipype.interfaces.fsl.model import Randomise
+    from nipype.interfaces.fsl.utils import ImageMaths      # unchanged import
+    from nipype.interfaces.io import DataSink
+
     wf = Workflow(name=name, base_dir=output_dir)
 
     # 1) Inputs: cope, mask, design.mat, contrast.con
@@ -427,10 +433,10 @@ def wf_randomise(output_dir, name="wf_randomise"):
         name='randomise'
     )
 
-    # 3) Convert TFCE‐corrected p’s → z for easy thresholding
+    # 3) Convert TFCE-corrected p’s → z for easy thresholding
     fdr_ztop = MapNode(
         ImageMaths(op_string='-ztop', suffix='_zstat'),
-        iterfield=['in_file'],
+        iterfield=['in_file'],  # will receive real file paths
         name='fdr_ztop'
     )
 
@@ -457,9 +463,9 @@ def wf_randomise(output_dir, name="wf_randomise"):
             ('con_file',    'tcon'),
         ]),
 
-        # b) take TFCE‐corrected p’s → z-scores
+        # b) take TFCE-corrected p’s → z-scores
         (randomise, fdr_ztop, [
-            (('t_corrected_p_files', flatten_list), 'in_file')
+            ('t_corrected_p_files', 'in_file'),  # now passing full paths
         ]),
 
         # c) collect Randomise outputs
@@ -476,10 +482,11 @@ def wf_randomise(output_dir, name="wf_randomise"):
             ('tstat_files',       'stats.@tstats'),
             ('tfce_corr_p_files', 'stats.@tfce_p'),
             ('z_thresh_files',    'stats.@zscores'),
-        ])
+        ]),
     ])
 
     return wf
+
 
 
 
