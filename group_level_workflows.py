@@ -365,12 +365,12 @@ def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
     wf.connect([
         # FLAMEO inputs
         (inputnode, flameo, [
-            ('cope_file',     'cope_file'),
-            ('var_cope_file', 'var_cope_file'),  # 🔧 corrected mapping to var_cope_file
-            ('mask_file',     'mask_file'),
-            ('design_file',   'design_file'),
-            ('grp_file',      'cov_split_file'),
-            ('con_file',      't_con_file')
+            ('cope_file',      'cope_file'),
+            ('var_cope_file',  'var_cope_file'),  # 🔧 corrected mapping: var_cope_file trait
+            ('mask_file',      'mask_file'),
+            ('design_file',    'design_file'),
+            ('grp_file',       'cov_split_file'),
+            ('con_file',       't_con_file')
         ]),
 
         # Smoothness estimation
