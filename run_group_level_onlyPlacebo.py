@@ -41,7 +41,8 @@ def run_group_level_wf(task, contrast, analysis_type, paths, dry_run=False):
     wf.inputs.inputnode.mask_file   = paths['mask_file']
     wf.inputs.inputnode.design_file = paths['design_file']
     wf.inputs.inputnode.con_file    = paths['con_file']
-    # 🔧 only wire result_dir when the inputnode actually defines that trait
+
+    # 🔧 Only wire result_dir if that trait exists on the inputnode
     if 'result_dir' in wf.inputs.inputnode.inputs.traits():
         wf.inputs.inputnode.result_dir = paths['result_dir']
 
