@@ -12,66 +12,104 @@ import numpy as np
 
 def create_dummy_design_files(group_info, output_dir):
     """
-    Create:
-      • design.mat      — the design matrix for FLAMEO
-      • design.grp      — a VEST‐formatted covsplit file (only for ANOVA)
-      • contrast.con    — contrast definitions
-
-    Returns:
-        design_file, covsplit_vest (or None), contrast_con
+    Create design.mat, design.grp, and contrast.con for either:
+      • Two-sample test (Patients vs Controls) when only one drug level
+      • 2×2 ANOVA (Patients/Controls × Placebo/Oxytocin) otherwise
     """
+    import os
+
     design_dir = os.path.join(output_dir, 'design_files')
     os.makedirs(design_dir, exist_ok=True)
-
     design_file = os.path.join(design_dir, 'design.mat')
-    plain_grp   = os.path.join(design_dir, 'covsplit.txt')
-    vest_grp    = os.path.join(design_dir, 'design.grp')
+    grp_file    = os.path.join(design_dir, 'design.grp')
     con_file    = os.path.join(design_dir, 'contrast.con')
 
-    # unpack group_info triples
-    drug_ids = [drug for _, _, drug in group_info]
+    # extract just the drug levels present
+    drug_ids     = [drug for _, _, drug in group_info]
     unique_drugs = sorted(set(drug_ids))
-    n = len(group_info)
+    n            = len(group_info)
 
-    # 1) design.mat + contrast.con
     if len(unique_drugs) == 1:
-        # one‐sample Patients vs Controls
-        rows = ['1' if grp == 1 else '-1' for _, grp, _ in group_info]
-        with open(design_file, 'w') as f:
-            f.write(f"/NumWaves 1\n/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(rows))
-        with open(con_file, 'w') as f:
-            f.write("/NumWaves 1\n/NumContrasts 1\n/Matrix\n1\n")
-        covsplit_vest = None
+        # --- Two-sample test Patients vs Controls ---
+        # Dummy‐code two EVs: [1 0] for Patients, [0 1] for Controls
+        design_rows     = []
+        variance_groups = []
+        for _, grp, _ in group_info:
+            if grp == 1:                # Patients
+                design_rows.append("1 0")
+            else:                       # Controls
+                design_rows.append("0 1")
+            variance_groups.append("1") # single variance group
 
-    else:
-        # 2×2 ANOVA
-        rows = []
-        for _, grp, drug in group_info:
-            ev = [0,0,0,0]
-            if grp == 1:  # Patients
-                ev[0 if drug == unique_drugs[0] else 1] = 1
-            else:         # Controls
-                ev[2 if drug == unique_drugs[0] else 3] = 1
-            rows.append(" ".join(map(str, ev)))
+        contrasts = ["1 -1"]  # Patients > Controls
 
+        # write design.mat
         with open(design_file, 'w') as f:
-            f.write(f"/NumWaves 4\n/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(rows))
-        contrasts = ["1  1 -1 -1", "1 -1  1 -1", "1 -1 -1  1"]
+            f.write("/NumWaves 2\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(design_rows))
+
+        # write design.grp
+        with open(grp_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(variance_groups))
+
+        # write contrast.con
         with open(con_file, 'w') as f:
-            f.write(f"/NumWaves 4\n/NumContrasts {len(contrasts)}\n/Matrix\n")
+            f.write("/NumWaves 2\n")
+            f.write(f"/NumContrasts {len(contrasts)}\n")
+            f.write("/Matrix\n")
             f.write("\n".join(contrasts))
 
-        # write plain group IDs and convert to vest
-        with open(plain_grp, 'w') as f:
-            for _, grp, _ in group_info:
-                f.write(f"{grp}\n")
-        subprocess.run(['Text2Vest', plain_grp, vest_grp], check=True)
-        os.remove(plain_grp)
-        covsplit_vest = vest_grp
+    else:
+        # --- Full 2×2 ANOVA dummy coding as before ---
+        design_mat     = []
+        variance_groups = []
+        for _, grp, drug in group_info:
+            row = [0,0,0,0]
+            if grp == 1:  # Patients
+                if drug == unique_drugs[0]:
+                    row[0] = 1; variance_groups.append("1")
+                else:
+                    row[1] = 1; variance_groups.append("2")
+            else:         # Controls
+                if drug == unique_drugs[0]:
+                    row[2] = 1; variance_groups.append("3")
+                else:
+                    row[3] = 1; variance_groups.append("4")
+            design_mat.append(" ".join(map(str,row)))
 
-    return design_file, covsplit_vest, con_file
+        contrasts = [
+            "1  1 -1 -1",  # Group effect
+            "1 -1  1 -1",  # Drug effect
+            "1 -1 -1  1",  # Interaction
+        ]
+
+        # write design.mat
+        with open(design_file, 'w') as f:
+            f.write("/NumWaves 4\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(design_mat))
+
+        # write design.grp
+        with open(grp_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(variance_groups))
+
+        # write contrast.con
+        with open(con_file, 'w') as f:
+            f.write("/NumWaves 4\n")
+            f.write(f"/NumContrasts {len(contrasts)}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(contrasts))
+
+    return design_file, grp_file, con_file
 
 
 
