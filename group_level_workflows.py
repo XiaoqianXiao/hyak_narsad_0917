@@ -41,7 +41,11 @@ def create_dummy_design_files(group_info, output_dir):
                 design_rows.append("0 1")
             variance_groups.append("1") # single variance group
 
-        contrasts = ["1 -1"]  # Patients > Controls
+        contrasts = [
+            "1 -1",  # Patients > Controls
+            "1  0",  # Patients mean
+            "0  1"  # Controls mean
+        ]
 
         # write design.mat
         with open(design_file, 'w') as f:
@@ -50,14 +54,12 @@ def create_dummy_design_files(group_info, output_dir):
             f.write("/Matrix\n")
             f.write("\n".join(design_rows))
 
-        # write design.grp
         with open(grp_file, 'w') as f:
             f.write("/NumWaves 1\n")
             f.write(f"/NumPoints {n}\n")
             f.write("/Matrix\n")
             f.write("\n".join(variance_groups))
 
-        # write contrast.con
         with open(con_file, 'w') as f:
             f.write("/NumWaves 2\n")
             f.write(f"/NumContrasts {len(contrasts)}\n")
@@ -547,166 +549,6 @@ def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", nam
 
     return wf
 
-
-# 1) Generate cubic searchlight centers
-def get_searchlight_coords(mask_file, radius=2, step=1):
-    import nibabel as nib, numpy as np
-    img = nib.load(mask_file)
-    mask = img.get_fdata().astype(bool)
-    xlen, ylen, zlen = mask.shape
-    coords = [(k, j, i)
-              for k in range(radius, xlen - radius, step)
-              for j in range(radius, ylen - radius, step)
-              for i in range(radius, zlen - radius, step)
-              if mask[k, j, i]]
-    return coords
-
-# 2) Create binary cube mask at each coordinate
-def create_cube_mask(mask_file, coord, radius, output_dir):
-    import nibabel as nib, numpy as np, os
-    img = nib.load(mask_file)
-    shape = img.shape
-    data = np.zeros(shape, np.uint8)
-    x, y, z = coord
-    x0, x1 = max(0, x - radius), min(shape[0], x + radius + 1)
-    y0, y1 = max(0, y - radius), min(shape[1], y + radius + 1)
-    z0, z1 = max(0, z - radius), min(shape[2], z + radius + 1)
-    data[x0:x1, y0:y1, z0:z1] = 1
-    out_img = nib.Nifti1Image(data, img.affine)
-    os.makedirs(output_dir, exist_ok=True)
-    out_file = os.path.join(output_dir, f"cube_mask_{x}_{y}_{z}.nii.gz")
-    out_img.to_filename(out_file)
-    return out_file
-
-# 3) Extract average time series within cube mask
-def extract_cube_avg_ts(bold_file, cube_mask):
-    import nibabel as nib, numpy as np
-    img4d = nib.load(bold_file)
-    data = img4d.get_fdata()
-    mask = nib.load(cube_mask).get_fdata().astype(bool)
-    ts = data[mask].reshape(-1, data.shape[-1])
-    return ts.mean(axis=0)
-
-# 4) Voxel-wise regression of avg_ts against each voxel -> beta map
-def run_voxelwise_regression(bold_file, avg_ts, brain_mask, temp_dir):
-    import nibabel as nib, numpy as np, os
-    img4d = nib.load(bold_file)
-    data = img4d.get_fdata()
-    mask = nib.load(brain_mask).get_fdata().astype(bool)
-    T = data.shape[-1]
-    D = np.vstack([avg_ts, np.ones(T)]).T
-    invD = np.linalg.pinv(D)
-    beta = np.zeros(data.shape[:-1])
-    for x, y, z in zip(*np.where(mask)):
-        ts = data[x, y, z, :]
-        beta[x, y, z] = invD.dot(ts)[0]
-    out_img = nib.Nifti1Image(beta, img4d.affine)
-    os.makedirs(temp_dir, exist_ok=True)
-    out_path = os.path.join(temp_dir, 'beta_map.nii.gz')
-    out_img.to_filename(out_path)
-    return out_path
-
-# 5) Combine all 3D beta maps into one 4D file
-def combine_beta_maps(beta_list, output_file):
-    import nibabel as nib, numpy as np
-    imgs = [nib.load(f).get_fdata() for f in beta_list]
-    data4d = np.stack(imgs, axis=-1)
-    affine = nib.load(beta_list[0]).affine
-    out_img = nib.Nifti1Image(data4d, affine)
-    out_img.to_filename(output_file)
-    return output_file
-
-# 6) Assemble workflow to yield single 4D NIfTI
-def searchlight_glm_wf(output_dir, radius=2, step=1, name="searchlight_glm_wf"):
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Inputs
-    inputnode = Node(
-        IdentityInterface(fields=['bold_file', 'brain_mask', 'mask_file']),
-        name='inputnode'
-    )
-
-    # Generate searchlight centers
-    coords_node = Node(
-        Function(
-            input_names=['mask_file', 'radius', 'step'],
-            output_names=['coords'],
-            function=get_searchlight_coords
-        ),
-        name='coords_node'
-    )
-    coords_node.inputs.radius = radius
-    coords_node.inputs.step = step
-
-    # Create cube masks per center
-    cube_mask = MapNode(
-        Function(
-            input_names=['mask_file', 'coord', 'radius', 'output_dir'],
-            output_names=['mask_file'],
-            function=create_cube_mask
-        ),
-        iterfield=['coord'],
-        name='cube_mask'
-    )
-    cube_mask.inputs.radius = radius
-    cube_mask.inputs.output_dir = os.path.join(output_dir, 'cube_masks')
-
-    # Extract average time series per cube
-    avg_ts = MapNode(
-        Function(
-            input_names=['bold_file', 'cube_mask'],
-            output_names=['avg_ts'],
-            function=extract_cube_avg_ts
-        ),
-        iterfield=['cube_mask'],
-        name='avg_ts'
-    )
-
-    # Voxel-wise regression for each avg_ts
-    reg = MapNode(
-        Function(
-            input_names=['bold_file', 'avg_ts', 'brain_mask', 'temp_dir'],
-            output_names=['beta_file'],
-            function=run_voxelwise_regression
-        ),
-        iterfield=['avg_ts'],
-        name='regression'
-    )
-    reg.inputs.temp_dir = os.path.join(output_dir, 'beta_tmp')
-
-    # Combine individual beta maps into one 4D
-    combine = Node(
-        Function(
-            input_names=['beta_list', 'output_file'],
-            output_names=['out_file'],
-            function=combine_beta_maps
-        ),
-        name='combine'
-    )
-    combine.inputs.output_file = os.path.join(output_dir, 'beta_4D.nii.gz')
-
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
-
-    wf.connect([
-        (inputnode, coords_node, [('mask_file', 'mask_file')]),
-        (inputnode, cube_mask, [('mask_file', 'mask_file')]),
-        (coords_node, cube_mask, [('coords', 'coord')]),
-
-        (inputnode, avg_ts, [('bold_file', 'bold_file')]),
-        (cube_mask, avg_ts, [('mask_file', 'cube_mask')]),
-
-        (inputnode, reg, [('bold_file', 'bold_file'), ('brain_mask', 'brain_mask')]),
-        (avg_ts, reg, [('avg_ts', 'avg_ts')]),
-
-        (reg, combine, [('beta_file', 'beta_list')]),
-        (combine, datasink, [('out_file', 'results.beta_4D')])
-    ])
-
-    return wf
 
 
 def flatten_zstats(zstats):
