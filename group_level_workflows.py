@@ -10,13 +10,21 @@ import pandas as pd
 import numpy as np
 
 
-def create_dummy_design_files(group_info, output_dir):
+def create_dummy_design_files(group_info, output_dir, use_guess=False):
     """
-    Create design.mat, design.grp, and contrast.con for either:
-      • Two-sample test (Patients vs Controls) when only one drug level
-      • 2×2 ANOVA (Patients/Controls × Placebo/Oxytocin) otherwise
+    Create design.mat, design.grp, and contrast.con for fMRI analysis based on
+    the number of unique drug levels and the 'use_guess' parameter.
+
+    - If len(unique_drugs) == 1: Two-sample t-test (Patients vs Controls).
+    - If len(unique_drugs) >= 2 and use_guess is False: 2x2 ANOVA (Group x Drug).
+    - If len(unique_drugs) >= 2 and use_guess is True: 2x2x2 ANOVA (Group x Drug x Guess).
+
+    Assumes group_info is a list of tuples:
+    (subject_id, group [0:controls, 1:patients], drug_use_level, [optional: guess])
+    If use_guess is True, the fourth element of the tuple is expected to be the guess.
     """
     import os
+    import numpy as np
 
     design_dir = os.path.join(output_dir, 'design_files')
     os.makedirs(design_dir, exist_ok=True)
@@ -24,14 +32,17 @@ def create_dummy_design_files(group_info, output_dir):
     grp_file    = os.path.join(design_dir, 'design.grp')
     con_file    = os.path.join(design_dir, 'contrast.con')
 
-    # extract just the drug levels present
-    drug_ids     = [drug for _, _, drug in group_info]
+    # Extract drug levels and optionally guesses
+    drug_ids     = [item[2] for item in group_info]
     unique_drugs = sorted(set(drug_ids))
     n            = len(group_info)
+    unique_guesses = []
+    if use_guess:
+        guess_ids = [item[3] for item in group_info]
+        unique_guesses = sorted(set(guess_ids))
 
     if len(unique_drugs) == 1:
         # --- Two-sample test Patients vs Controls ---
-        # Dummy‐code two EVs: [1 0] for Patients, [0 1] for Controls
         design_rows     = []
         variance_groups = []
         for _, grp, _ in group_info:
@@ -41,15 +52,16 @@ def create_dummy_design_files(group_info, output_dir):
                 design_rows.append("0 1")
             variance_groups.append("1") # single variance group
 
+        num_evs = 2
         contrasts = [
             "1 -1",  # Patients > Controls
             "1  0",  # Patients mean
-            "0  1"  # Controls mean
+            "0  1"   # Controls mean
         ]
 
         # write design.mat
         with open(design_file, 'w') as f:
-            f.write("/NumWaves 2\n")
+            f.write(f"/NumWaves {num_evs}\n")
             f.write(f"/NumPoints {n}\n")
             f.write("/Matrix\n")
             f.write("\n".join(design_rows))
@@ -61,17 +73,18 @@ def create_dummy_design_files(group_info, output_dir):
             f.write("\n".join(variance_groups))
 
         with open(con_file, 'w') as f:
-            f.write("/NumWaves 2\n")
+            f.write(f"/NumWaves {num_evs}\n")
             f.write(f"/NumContrasts {len(contrasts)}\n")
             f.write("/Matrix\n")
             f.write("\n".join(contrasts))
 
-    else:
-        # --- Full 2×2 ANOVA dummy coding as before ---
+    elif len(unique_drugs) >= 2 and not use_guess:
+        # --- Full 2×2 ANOVA (Group × Drug) ---
         design_mat     = []
         variance_groups = []
+        num_evs        = 4
         for _, grp, drug in group_info:
-            row = [0,0,0,0]
+            row = [0, 0, 0, 0]
             if grp == 1:  # Patients
                 if drug == unique_drugs[0]:
                     row[0] = 1; variance_groups.append("1")
@@ -82,17 +95,21 @@ def create_dummy_design_files(group_info, output_dir):
                     row[2] = 1; variance_groups.append("3")
                 else:
                     row[3] = 1; variance_groups.append("4")
-            design_mat.append(" ".join(map(str,row)))
+            design_mat.append(" ".join(map(str, row)))
 
         contrasts = [
-            "1  1 -1 -1",  # Group effect
-            "1 -1  1 -1",  # Drug effect
-            "1 -1 -1  1",  # Interaction
+            "1  1 -1 -1",  # Group effect (Patients > Controls, averaged across drugs)
+            "1 -1  1 -1",  # Drug effect (Drug1 > Drug2, averaged across groups)
+            "1 -1 -1  1",  # Interaction (Group x Drug)
+            "1  0  0  0",  # Patients & Drug1 mean
+            "0  1  0  0",  # Patients & Drug2 mean
+            "0  0  1  0",  # Controls & Drug1 mean
+            "0  0  0  1",  # Controls & Drug2 mean
         ]
 
         # write design.mat
         with open(design_file, 'w') as f:
-            f.write("/NumWaves 4\n")
+            f.write(f"/NumWaves {num_evs}\n")
             f.write(f"/NumPoints {n}\n")
             f.write("/Matrix\n")
             f.write("\n".join(design_mat))
@@ -106,10 +123,125 @@ def create_dummy_design_files(group_info, output_dir):
 
         # write contrast.con
         with open(con_file, 'w') as f:
-            f.write("/NumWaves 4\n")
+            f.write(f"/NumWaves {num_evs}\n")
             f.write(f"/NumContrasts {len(contrasts)}\n")
             f.write("/Matrix\n")
             f.write("\n".join(contrasts))
+
+    elif len(unique_drugs) >= 2 and use_guess:
+        # --- Full 2×2×2 ANOVA (Group × Drug × Guess) ---
+        if not unique_guesses:
+            raise ValueError("Guess information is required in group_info when use_guess=True.")
+
+        design_mat     = []
+        variance_groups = []
+        num_evs        = 2 * len(unique_drugs) * len(unique_guesses)
+        ev_index_map   = {}
+        current_index  = 0
+
+        for grp_idx in range(2):  # 0: Controls, 1: Patients
+            for drug_idx, drug in enumerate(unique_drugs):
+                for guess_idx, guess in enumerate(unique_guesses):
+                    ev_index_map[(grp_idx, drug, guess)] = current_index
+                    current_index += 1
+
+        for item in group_info:
+            grp, drug, guess = item[1], item[2], item[3]
+            row = [0] * num_evs
+            if (grp, drug, guess) in ev_index_map:
+                row[ev_index_map[(grp, drug, guess)]] = 1
+                variance_groups.append(str(ev_index_map[(grp, drug, guess)] + 1))
+            design_mat.append(" ".join(map(str, row)))
+
+        contrasts = []
+        # Main effect of Group
+        contrast_group = [0] * num_evs
+        for drug in unique_drugs:
+            for guess in unique_guesses:
+                if (1, drug, guess) in ev_index_map:
+                    contrast_group[ev_index_map[(1, drug, guess)]] = 1 / (len(unique_drugs) * len(unique_guesses))
+                if (0, drug, guess) in ev_index_map:
+                    contrast_group[ev_index_map[(0, drug, guess)]] = -1 / (len(unique_drugs) * len(unique_guesses))
+        contrasts.append("Group_Effect")
+        contrasts.append(" ".join(map(str, contrast_group)))
+
+        # Main effect of Drug (assuming 'use_drug' and 'placebo' are in unique_drugs)
+        if 'use_drug' in unique_drugs and 'placebo' in unique_drugs:
+            drug1_idx = unique_drugs.index('use_drug')
+            drug2_idx = unique_drugs.index('placebo')
+            contrast_drug = [0] * num_evs
+            for grp_idx in range(2):
+                for guess in unique_guesses:
+                    if (grp_idx, unique_drugs[drug1_idx], guess) in ev_index_map:
+                        contrast_drug[ev_index_map[(grp_idx, unique_drugs[drug1_idx], guess)]] = 1 / 2
+                    if (grp_idx, unique_drugs[drug2_idx], guess) in ev_index_map:
+                        contrast_drug[ev_index_map[(grp_idx, unique_drugs[drug2_idx], guess)]] = -1 / 2
+            contrasts.append("Drug_Effect")
+            contrasts.append(" ".join(map(str, contrast_drug)))
+
+            # Interaction Group x Drug
+            contrast_group_drug_interaction = [0] * num_evs
+            for guess in unique_guesses:
+                if (1, unique_drugs[drug1_idx], guess) in ev_index_map:
+                    contrast_group_drug_interaction[ev_index_map[(1, unique_drugs[drug1_idx], guess)]] = 1 / len(unique_guesses)
+                if (0, unique_drugs[drug1_idx], guess) in ev_index_map:
+                    contrast_group_drug_interaction[ev_index_map[(0, unique_drugs[drug1_idx], guess)]] = -1 / len(unique_guesses)
+                if (1, unique_drugs[drug2_idx], guess) in ev_index_map:
+                    contrast_group_drug_interaction[ev_index_map[(1, unique_drugs[drug2_idx], guess)]] = -1 / len(unique_guesses)
+                if (0, unique_drugs[drug2_idx], guess) in ev_index_map:
+                    contrast_group_drug_interaction[ev_index_map[(0, unique_drugs[drug2_idx], guess)]] = 1 / len(unique_guesses)
+            contrasts.append("Group_x_Drug")
+            contrasts.append(" ".join(map(str, contrast_group_drug_interaction)))
+
+            # Drug effect for guess == 'use'
+            if 'use' in unique_guesses:
+                guess_use_idx = unique_guesses.index('use')
+                contrast_drug_guess_use = [0] * num_evs
+                for grp_idx in range(2):
+                    if (grp_idx, unique_drugs[drug1_idx], unique_guesses[guess_use_idx]) in ev_index_map:
+                        contrast_drug_guess_use[ev_index_map[(grp_idx, unique_drugs[drug1_idx], unique_guesses[guess_use_idx])]] = 1
+                    if (grp_idx, unique_drugs[drug2_idx], unique_guesses[guess_use_idx]) in ev_index_map:
+                        contrast_drug_guess_use[ev_index_map[(grp_idx, unique_drugs[drug2_idx], unique_guesses[guess_use_idx])]] = -1
+                contrasts.append("Drug_Effect_Guess_Use")
+                contrasts.append(" ".join(map(str, contrast_drug_guess_use)))
+
+            # Drug effect for guess == 'no'
+            if 'no' in unique_guesses:
+                guess_no_idx = unique_guesses.index('no')
+                contrast_drug_guess_no = [0] * num_evs
+                for grp_idx in range(2):
+                    if (grp_idx, unique_drugs[drug1_idx], unique_guesses[guess_no_idx]) in ev_index_map:
+                        contrast_drug_guess_no[ev_index_map[(grp_idx, unique_drugs[drug1_idx], unique_guesses[guess_no_idx])]] = 1
+                    if (grp_idx, unique_drugs[drug2_idx], unique_guesses[guess_no_idx]) in ev_index_map:
+                        contrast_drug_guess_no[ev_index_map[(grp_idx, unique_drugs[drug2_idx], unique_guesses[guess_no_idx])]] = -1
+                contrasts.append("Drug_Effect_Guess_No")
+                contrasts.append(" ".join(map(str, contrast_drug_guess_no)))
+
+        # write design.mat
+        with open(design_file, 'w') as f:
+            f.write(f"/NumWaves {num_evs}\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(design_mat))
+
+        # write design.grp
+        with open(grp_file, 'w') as f:
+            f.write("/NumWaves 1\n")
+            f.write(f"/NumPoints {n}\n")
+            f.write("/Matrix\n")
+            f.write("\n".join(variance_groups))
+
+        # write contrast.con
+        with open(con_file, 'w') as f:
+            f.write(f"/NumWaves {num_evs}\n")
+            f.write(f"/NumContrasts {len(contrasts) // 2}\n")
+            f.write("/Matrix\n")
+            for i in range(0, len(contrasts), 2):
+                f.write(f"{contrasts[i+1]}\n")
+
+    else:
+        print("Warning: Less than two unique drug levels found when use_guess=False.")
+        # You might want to implement a different design if only one drug level exists
 
     return design_file, grp_file, con_file
 
@@ -150,11 +282,11 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     wf = Workflow(name=name, base_dir=output_dir)
 
     # Input node
-    inputnode = Node(IdentityInterface(fields=['in_copes', 'in_varcopes', 'group_info', 'result_dir', 'group_mask']),
+    inputnode = Node(IdentityInterface(fields=['in_copes', 'in_varcopes', 'group_info', 'use_guess', 'result_dir', 'group_mask']),
                      name='inputnode')
 
     # Design generation
-    design_gen = Node(Function(input_names=['group_info', 'output_dir'],
+    design_gen = Node(Function(input_names=['group_info', 'output_dir','use_guess'],
                                output_names=['design_file', 'grp_file', 'con_file'],
                                function=create_dummy_design_files),
                       name='design_gen')
@@ -192,6 +324,7 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     # Workflow connections
     wf.connect([
         (inputnode, design_gen, [('group_info', 'group_info')]),
+        (inputnode, design_gen, [('use_guess', 'use_guess')]),
         (inputnode, merge_copes, [('in_copes', 'in_files')]),
         (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
         (inputnode, resample_copes, [('group_mask', 'reference')]),
