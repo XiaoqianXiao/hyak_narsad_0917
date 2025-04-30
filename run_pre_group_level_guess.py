@@ -85,7 +85,7 @@ if __name__ == "__main__":
         else:
             sub_no_MRI = sub_no_MRI_phase3
         group_info_df = df_behav.loc[df_behav['subID'].isin(sub_list) & ~df_behav['subID'].isin(sub_no_MRI)]
-        group_info = list(group_info_df[['subID', 'group_id', 'drug_id']].itertuples(index=False, name=None))
+        group_info = list(group_info_df[['subID', 'group_id', 'drug_id', 'guess_id']].itertuples(index=False, name=None))
         task_results_dir = os.path.join(results_dir, f'task-{task}')
         task_workflow_dir = os.path.join(workflow_dir, f'task-{task}')
         os.makedirs(task_results_dir, exist_ok=True)
