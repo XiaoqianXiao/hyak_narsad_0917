@@ -41,8 +41,8 @@ def create_dummy_design_files(group_info, output_dir, use_guess=False):
     unique_drugs = sorted(set(drug_ids))
     n            = len(group_info)
 
-    if use_guess:
-        guess_ids    = [info[3] for info in group_info]
+    if use_guess:  # 🔧
+        guess_ids = [info[3] for info in group_info]
         unique_guess = sorted(set(guess_ids))
     else:
         unique_guess = []
@@ -78,7 +78,7 @@ def create_dummy_design_files(group_info, output_dir, use_guess=False):
         return design_f, grp_f, con_f
 
     # --- Case 2: 2×2 ANOVA (no guess) ---
-    if len(unique_drugs) >= 2 and not use_guess:
+    elif len(unique_drugs) >= 2 and not use_guess:
         design_mat     = []
         variance_groups= []
         for _, grp, drug in group_info:
@@ -116,19 +116,17 @@ def create_dummy_design_files(group_info, output_dir, use_guess=False):
         return design_f, grp_f, con_f
 
         # — Case 3: 2×2×2 ANOVA with Guess and extra contrasts —
-        # build EV index
-        G = len(drugs)
-        Q = len(guesses)
-        num_evs = 2 * G * Q
+    elif len(unique_drugs) >= 2 and use_guess:
         ev_index = {}
         idx = 0
-        for grp in (1, 2):
-            for d in drugs:
-                for q in guesses:
-                    ev_index[(grp, d, q)] = idx
+        for grp_id in (1, 2):
+            for d in unique_drugs:
+                for q in unique_guess:
+                    ev_index[(grp_id, d, q)] = idx
                     idx += 1
+        num_evs = idx
 
-        # design matrix & variance groups
+        # design matrix and variance groups
         design_rows = []
         grp_rows = []
         for _, grp, d, q in group_info:
@@ -147,12 +145,11 @@ def create_dummy_design_files(group_info, output_dir, use_guess=False):
         c_3way = [0] * num_evs
         c_corr = [0] * num_evs  # drug effect when guess==drug
         c_incorr = [0] * num_evs  # drug effect when guess!=drug
-        c_diff = [0] * num_evs  # corr - incorr
 
-        for (grp, d, q), ev in ev_index.items():
-            g = 1 if grp == 1 else -1
-            dr = 1 if d == drugs[0] else -1
-            gs = 1 if q == guesses[0] else -1
+        for (grp_id, d, q), ev in ev_index.items():
+            g = +1 if grp_id == 1 else -1
+            dr = +1 if d == unique_drugs[0] else -1
+            gs = +1 if q == unique_guess[0] else -1
 
             c_group[ev] = g
             c_drug[ev] = dr
@@ -162,38 +159,35 @@ def create_dummy_design_files(group_info, output_dir, use_guess=False):
             c_dxq[ev] = dr * gs
             c_3way[ev] = g * dr * gs
 
-            # new: correct vs incorrect drug effects
+            # correct vs incorrect drug contrasts
             if d == q:
-                # correct guesses: +1 for drug1, -1 for drug2
-                c_corr[ev] = 1 if d == drugs[0] else -1
+                c_corr[ev] = dr
             else:
-                # incorrect guesses: +1 for drug1, -1 for drug2
-                c_incorr[ev] = 1 if d == drugs[0] else -1
+                c_incorr[ev] = dr
 
         contrasts = [
             c_group, c_drug, c_guess,
             c_gxd, c_gxq, c_dxq, c_3way,
-            c_corr, c_incorr
+            c_corr, c_incorr,
+            # difference between correct & incorrect:
+            [c_corr[i] - c_incorr[i] for i in range(num_evs)]
         ]
 
-        # write design.mat
+        # write out
         with open(design_f, 'w') as f:
             f.write(f"/NumWaves {num_evs}\n/NumPoints {n}\n/Matrix\n")
             f.write("\n".join(design_rows))
-
-        # write design.grp
         with open(grp_f, 'w') as f:
-            f.write(f"/NumWaves 1\n/NumPoints {n}\n/Matrix\n")
+            f.write("/NumWaves 1\n/NumPoints {n}\n/Matrix\n".format(n=n))
             f.write("\n".join(grp_rows))
-
-        # write contrast.con
         with open(con_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n")
-            f.write(f"/NumContrasts {len(contrasts)}\n/Matrix\n")
+            f.write(f"/NumWaves {num_evs}\n/NumContrasts {len(contrasts)}\n/Matrix\n")
             for c in contrasts:
                 f.write(" ".join(map(str, c)) + "\n")
-
         return design_f, grp_f, con_f
+
+    else:
+        raise ValueError("Unexpected combination of drug‐levels/use_guess")
 
 
 
@@ -244,6 +238,7 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
                                imports=['import os', 'import numpy as np']),
                       name='design_gen')
     design_gen.inputs.output_dir = output_dir
+    design_gen.inputs.use_guess = use_guess
 
     # Merge nodes
     merge_copes = Node(Merge(dimension='t', output_type='NIFTI_GZ'), name='merge_copes')
