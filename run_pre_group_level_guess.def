@@ -9,7 +9,7 @@ From: narsad-fmri_1st_level_1.0.sif
 
 %files
     run_pre_group_level_guess.py /app/run_pre_group_level_guess.py
-    group_level_workflows_guess.py /app/group_level_workflows.py
+    group_level_workflows.py /app/group_level_workflows.py
 
 %post
     chmod +x /app/run_pre_group_level_guess.py
