@@ -44,13 +44,13 @@ df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
 
 # Map groups and drugs
 group_levels = df_behav['group'].unique()
-drug_levels = df_behav['Drug'].unique()
+drug_levels = df_behav['drug_condition'].unique()
 guess_levels = df_behav['guess'].unique()
 group_map = {level: idx + 1 for idx, level in enumerate(group_levels)}
 drug_map = {level: idx + 1 for idx, level in enumerate(drug_levels)}
 guess_map = {level: idx + 1 for idx, level in enumerate(guess_levels)}
 df_behav['group_id'] = df_behav['group'].map(group_map)
-df_behav['drug_id'] = df_behav['Drug'].map(drug_map)
+df_behav['drug_id'] = df_behav['drug_condition'].map(drug_map)
 df_behav['guess_id'] = df_behav['guess'].map(guess_map)
 
 # Load first-level data
