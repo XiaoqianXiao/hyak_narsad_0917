@@ -99,8 +99,8 @@ if __name__ == "__main__":
             os.makedirs(contrast_results_dir, exist_ok=True)
             os.makedirs(contrast_workflow_dir, exist_ok=True)
 
-            copes, varcopes = collect_task_data(task, contrast, [sub for sub, _, _ in group_info])
-            expected_subjects = len(group_info)
+            copes, varcopes = collect_task_data(
+                task, contrast,[info[0] for info in group_info])
 
             if len(copes) != expected_subjects or len(varcopes) != expected_subjects:
                 print(f"Skipping contrast {contrast}: Expected {expected_subjects} subjects, "
