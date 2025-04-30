@@ -238,7 +238,6 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
                                imports=['import os', 'import numpy as np']),
                       name='design_gen')
     design_gen.inputs.output_dir = output_dir
-    design_gen.inputs.use_guess = use_guess
 
     # Merge nodes
     merge_copes = Node(Merge(dimension='t', output_type='NIFTI_GZ'), name='merge_copes')
