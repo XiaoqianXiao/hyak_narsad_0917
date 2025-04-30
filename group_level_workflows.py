@@ -10,10 +10,6 @@ import pandas as pd
 import numpy as np
 
 
-import os
-
-import os
-
 def create_dummy_design_files(group_info, output_dir, use_guess=False):
     """
     Create design.mat, design.grp, and contrast.con for fMRI group-level analysis:
@@ -244,7 +240,8 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     # Design generation
     design_gen = Node(Function(input_names=['group_info', 'output_dir','use_guess'],
                                output_names=['design_file', 'grp_file', 'con_file'],
-                               function=create_dummy_design_files),
+                               function=create_dummy_design_files,
+                               imports=['import os', 'import numpy as np']),
                       name='design_gen')
     design_gen.inputs.output_dir = output_dir
 
