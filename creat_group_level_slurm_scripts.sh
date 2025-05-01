@@ -28,7 +28,7 @@ for task in "${tasks[@]}"; do
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
-#SBATCH --time=4:00:00
+#SBATCH --time=8:00:00
 #SBATCH --output=${out_path}
 #SBATCH --error=${err_path}
 
