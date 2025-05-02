@@ -9,7 +9,7 @@ import os
 import argparse
 import pandas as pd
 from bids.layout import BIDSLayout
-from first_level_workflow import first_level_single_trial_wf
+from first_level_workflows import first_level_single_trial_wf
 
 # Set FSL environment variables
 os.environ['FSLOUTPUTTYPE'] = 'NIFTI_GZ'
