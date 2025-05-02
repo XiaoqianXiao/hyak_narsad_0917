@@ -45,11 +45,23 @@ From: ubuntu:20.04
 
 %files
     run_1st_level.py /app/run_1st_level.py
+    run_1st_level_single_trial.py /app/run_1st_level_single_trial.py
     first_level_workflows.py /app/first_level_workflows.py
     utils.py /app/utils.py
 
 %post
-    chmod +x /app/run_1st_level.py
+    chmod +x /app/run_1st_level.py /app/run_1st_level_single_trial.py
 
 %runscript
-    exec python3 /app/run_1st_level.py "$@"
+    #!/bin/bash
+    CMD="$1"; shift || true
+    case "$CMD" in
+      standard)
+        exec python3 /app/run_1st_level.py "$@" ;;
+      single_trial)
+        exec python3 /app/run_1st_level_single_trial.py "$@" ;;
+      *)
+        echo "Usage: $(basename $0) {standard|single_trial} [args...]" >&2
+        exit 1
+        ;;
+    esac

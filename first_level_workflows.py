@@ -1,4 +1,5 @@
 from nipype.pipeline import engine as pe
+from nipype.pipeline.engine import Workflow, Node
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
@@ -6,9 +7,15 @@ from utils import _dict_ds
 from utils import _bids2nipypeinfo
 from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design
 import os
+import pandas as pd
+from nipype.interfaces.utility import IdentityInterface, Function
+from nipype.interfaces.base import Bunch
+
 
 class DerivativesDataSink(BIDSDerivatives):
     out_path_base = 'firstLevel'
+
+
 DATA_ITEMS = ['bold', 'mask', 'events', 'regressors', 'tr']
 
 
@@ -165,5 +172,120 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     return workflow
 
 
+# first_level_workflow for single trial estimate
+# Nipype workflow for single-trial GLM estimation (LSA & LSS) using FILMGLS
+def make_session_info_lsa(events_df):
+    """Build session info with one regressor per trial (LSA)."""
+    conds, onsets, durations = [], [], []
+    for _, row in events_df.iterrows():
+        name = f"{row.trial_type}_t{row.trial_idx}"
+        conds.append(name)
+        onsets.append([row.onset])
+        durations.append([row.duration])
+    return Bunch(conditions=conds, onsets=onsets, durations=durations, amplitudes=None)
 
 
+def make_session_info_lss(events_df, target_idx):
+    """Build session info for target trial vs. all others combined (LSS)."""
+    target = events_df.loc[events_df.trial_idx == target_idx].iloc[0]
+    others = events_df.loc[events_df.trial_idx != target_idx]
+    return Bunch(
+        conditions=[f"{target.trial_type}_t{target_idx}", "others"],
+        onsets=[[target.onset], others.onset.tolist()],
+        durations=[[target.duration], others.duration.tolist()],
+        amplitudes=None
+    )
+
+
+def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, method, trial_idx, out_base):
+    """
+    Estimate beta map for a single trial (LSA or LSS) via FILMGLS.
+    Returns path to stats directory.
+    """
+    events_df = pd.read_csv(events_file)
+
+    # Prepare session info and condition name
+    if method == 'LSA':
+        sess = make_session_info_lsa(events_df)
+        idx_to_cond = {int(cond.split('_t')[-1]): cond for cond in sess.conditions}
+        cond_name = idx_to_cond[trial_idx]
+        sess_info = sess
+        prefix = f"LSA_trial_{trial_idx:03d}"
+    else:
+        sess_info = make_session_info_lss(events_df, trial_idx)
+        cond_name = sess_info.conditions[0]
+        prefix = f"LSS_trial_{trial_idx:03d}"
+
+    # Create design
+    design_dir = os.path.join(out_base, prefix, 'design')
+    os.makedirs(design_dir, exist_ok=True)
+    level1 = Level1Design(
+        interscan_interval=t_r,
+        bases={hrf_model: {'derivs': False}},
+        session_info=[sess_info],
+        mask_image=mask_img,
+        model_serial_correlations=True,
+        film_threshold=1000,
+        run_mode='fe',
+        contrast_info=[(f"beta_{cond_name}", 'T', [cond_name], [1.0])],
+        output_dir=design_dir
+    )
+    res1 = level1.run()
+
+    # Run FILMGLS
+    mat_file = res1.outputs.design_mat
+    con_file = res1.outputs.design_con
+    stats_dir = os.path.join(out_base, prefix, 'stats')
+    os.makedirs(stats_dir, exist_ok=True)
+    film = FILMGLS(
+        in_file=func_img,
+        design_file=mat_file,
+        contrast_file=con_file,
+        mask_file=mask_img,
+        out_dir_file=stats_dir
+    )
+    film.run()
+    return stats_dir
+
+
+def first_level_single_trial_wf(name='single_trial_wf'):
+    """Builds Nipype Workflow to run single-trial LSA & LSS GLM estimations."""
+    wf = Workflow(name=name)
+
+    # Input spec
+    inputnode = Node(
+        IdentityInterface(fields=[
+            'func_img', 'mask_img', 'events_file',
+            't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
+        ]),
+        name='inputnode'
+    )
+
+    # Trial estimation node
+    est_node = Node(
+        Function(
+            input_names=[
+                'func_img', 'mask_img', 'events_file',
+                't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
+            ],
+            output_names=['stats_dir'],
+            function=estimate_single_trial
+        ),
+        name='estimate_single_trial'
+    )
+
+    # Connect nodes
+    wf.connect([
+        (inputnode, est_node, [
+            ('func_img', 'func_img'),
+            ('mask_img', 'mask_img'),
+            ('events_file', 'events_file'),
+            ('t_r', 't_r'),
+            ('hrf_model', 'hrf_model'),
+            ('method', 'method'),
+            ('trial_idx', 'trial_idx'),
+            ('out_base', 'out_base')
+        ])
+    ])
+
+    return wf
