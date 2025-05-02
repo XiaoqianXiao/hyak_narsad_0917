@@ -1,6 +1,7 @@
 #!/bin/bash
 
-scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel"
+#scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel"
+scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel/single_trial"
 
 for phaseID in 2 3; do
 #for phaseID in 3; do
