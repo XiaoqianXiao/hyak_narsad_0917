@@ -66,7 +66,7 @@ module load apptainer
 apptainer run \\
   -B {bids_dir}:/data \\
   -B {work_dir}:/scrubbed_dir \\
-  {container_img} \\
+  {container_path} \\
   single_trial \\
     --subject {sub} \\
     --task {task} \\
