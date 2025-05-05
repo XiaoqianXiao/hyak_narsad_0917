@@ -64,8 +64,8 @@ def create_slurm_script(sub, task, work_dir):
 module load apptainer
 
 apptainer run \\
-  -B {bids_dir}:/data \\
-  -B {work_dir}:/scrubbed_dir \\
+  -B /gscratch/fang:/data \\
+  -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir \\
   {container_path} \\
   single_trial \\
     --subject {sub} \\
