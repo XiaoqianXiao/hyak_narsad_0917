@@ -32,24 +32,22 @@ project_name = 'NARSAD'
 data_dir = os.path.join(root_dir, project_name, 'MRI')
 bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
+fmriprep_folder = os.path.join(derivatives_dir, 'fmriprep')
 behav_dir = os.path.join(data_dir, 'source_data', 'behav')
 scrubbed_dir = '/scrubbed_dir'
 container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 
-# Logging directory for SLURM scripts
-output_logs = os.path.join(derivatives_dir, 'logs', 'single_trial')
-os.makedirs(output_logs, exist_ok=True)
 
 # BIDS space filter
 space = ['MNI152NLin2009cAsym']
 
-def create_slurm_script(sub, task):
-    """Generate a SLURM script to run single_trial inside the container."""
-    work_bind = scrubbed_dir
-    work_dir = os.path.join(work_bind, 'workflows/firstLevel', 'single_trial', task)
-    os.makedirs(work_dir, exist_ok=True)
-    out_dir = os.path.join(output_logs, task)
-    os.makedirs(out_dir, exist_ok=True)
+def create_slurm_script(sub, task, work_dir):
+    """
+    Write a SLURM script that will call the container's single_trial entrypoint.
+    """
+    # where to store the .sh locally
+    local_work = os.path.join(work_dir, project_name, 'workflows', 'single_trial', task)
+    os.makedirs(local_work, exist_ok=True)
 
     sbatch = f"""#!/bin/bash
 #SBATCH --job-name=st_{task}_sub_{sub}
@@ -60,50 +58,55 @@ def create_slurm_script(sub, task):
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=40G
 #SBATCH --time=2:00:00
-#SBATCH --output={out_dir}/st_{task}_sub_{sub}_%j.out
-#SBATCH --error={out_dir}/st_{task}_sub_{sub}_%j.err
+#SBATCH --output={local_work}/st_{task}_sub_{sub}_%j.out
+#SBATCH --error={local_work}/st_{task}_sub_{sub}_%j.err
 
 module load apptainer
 
-apptainer exec \\
+apptainer run \\
   -B {bids_dir}:/data \\
-  -B {scrubbed_dir}:/scrubbed_dir \\
-  {container_path} \\
+  -B {work_dir}:/scrubbed_dir \\
+  {container_img} \\
   single_trial \\
     --subject {sub} \\
     --task {task} \\
     --bids_dir /data \\
     --derivatives_dir /data/derivatives \\
-    --work_dir /scrubbed_dir/workflows/firstLevel/single_trial/{task}/sub-{sub}
+    --work_dir /scrubbed_dir
 """
-    script_path = os.path.join(work_dir, f'st_sub-{sub}_task-{task}.sh')
+    script_path = os.path.join(local_work, f"st_sub-{sub}_task-{task}.sh")
     with open(script_path, 'w') as f:
         f.write(sbatch)
     return script_path
 
-def run_subject_workflow(sub, task):
-    """Execute the single-trial workflow for one subject/task."""
+def run_subject_workflow(sub, task, work_dir):
+    """
+    Execute the single-trial workflow for one subject/task.
+    """
     layout = BIDSLayout(bids_dir, validate=False, derivatives=derivatives_dir)
-    runs = layout.get(subject=sub, task=task,
-                      desc='preproc', suffix='bold',
-                      space=space, extension=['.nii', '.nii.gz'])
+    runs = layout.get(
+        subject=sub, task=task,
+        desc='preproc', suffix='bold',
+        space=space, extension=['.nii', '.nii.gz']
+    )
     if not runs:
         raise FileNotFoundError(f"No preprocessed BOLD for sub-{sub} task-{task}")
     bold = runs[0].path
-    entities = runs[0].entities
-    tr = entities.get('RepetitionTime')
-    mask = layout.get(subject=sub, task=task,
-                      suffix='mask', extension=['.nii', '.nii.gz'],
-                      space=space)[0].path
+    tr = runs[0].entities.get('RepetitionTime')
 
-    events = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+    mask = layout.get(
+        subject=sub, task=task,
+        suffix='mask', extension=['.nii', '.nii.gz'],
+        space=space
+    )[0].path
+
+    events = os.path.join(behav_dir, f"task-Narsad_{task}_half_events.csv")
     if not os.path.exists(events):
         raise FileNotFoundError(f"Events file missing: {events}")
 
     wf = first_level_single_trial_wf()
-    wf.base_dir = os.path.join(
-        scrubbed_dir, 'workflows', 'single_trial', task, f'sub-{sub}'
-    )
+    # use the passed work_dir as the Nipype base_dir root
+    wf.base_dir = os.path.join(work_dir, project_name, 'workflows', 'single_trial', task, f"sub-{sub}")
 
     wf.inputs.inputnode.func_img    = bold
     wf.inputs.inputnode.mask_img    = mask
@@ -111,8 +114,7 @@ def run_subject_workflow(sub, task):
     wf.inputs.inputnode.t_r         = tr
     wf.inputs.inputnode.hrf_model   = 'glover'
     wf.inputs.inputnode.out_base    = os.path.join(
-        derivatives_dir, 'fMRI_analysis_single_trial',
-        f'sub-{sub}', f'task-{task}'
+        derivatives_dir, 'fMRI_analysis_single_trial', f"sub-{sub}", f"task-{task}"
     )
 
     df = pd.read_csv(events)
@@ -122,16 +124,19 @@ def run_subject_workflow(sub, task):
     wf.run(**plugin_settings)
     print(f"Completed single-trial for sub-{sub} task-{task}")
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(
         description="Run or generate SLURM scripts for single-trial first-level GLM"
     )
-    parser.add_argument('--subject', help="Subject ID (no 'sub-')")
-    parser.add_argument('--task',    help="Task label (no 'task-')")
-    args = parser.parse_args()
+    p.add_argument('--subject', help="Subject ID (no 'sub-')")
+    p.add_argument('--task',    help="Task label (no 'task-')")
+    p.add_argument('--work_dir',
+                   default=os.getenv('SCRUBBED_DIR', '/scrubbed_dir'),
+                   help="Base scratch/work directory")
+    args = p.parse_args()
 
     if args.subject and args.task:
-        run_subject_workflow(args.subject, args.task)
+        run_subject_workflow(args.subject, args.task, args.work_dir)
     else:
         layout = BIDSLayout(bids_dir, validate=False, derivatives=derivatives_dir)
         query = {
@@ -143,5 +148,5 @@ if __name__ == '__main__':
         for run in layout.get(**query):
             sub  = run.entities['subject']
             task = run.entities['task']
-            script = create_slurm_script(sub, task)
-            print('Wrote SLURM script:', script)
+            script = create_slurm_script(sub, task, args.work_dir)
+            print("Wrote SLURM script:", script)
