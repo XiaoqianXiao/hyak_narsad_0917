@@ -33,8 +33,8 @@ data_dir = os.path.join(root_dir, project_name, 'MRI')
 bids_dir = data_dir
 derivatives_dir = os.path.join(data_dir, 'derivatives')
 behav_dir = os.path.join(data_dir, 'source_data', 'behav')
-scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
-container_path = os.getenv('CONTAINER_IMG', '/scrubbed_dir/images/narsad-fmri_1st_level_1.0.sif')
+scrubbed_dir = '/scrubbed_dir'
+container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 
 # Logging directory for SLURM scripts
 output_logs = os.path.join(derivatives_dir, 'logs', 'single_trial')
