@@ -44,20 +44,23 @@ df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
 
 # Map groups and drugs
 group_levels = df_behav['group'].unique()
-drug_levels = df_behav['Drug'].unique()
+drug_levels = df_behav['drug_condition'].unique()
+guess_levels = df_behav['guess'].unique()
 group_map = {level: idx + 1 for idx, level in enumerate(group_levels)}
 drug_map = {level: idx + 1 for idx, level in enumerate(drug_levels)}
+guess_map = {level: idx + 1 for idx, level in enumerate(guess_levels)}
 df_behav['group_id'] = df_behav['group'].map(group_map)
-df_behav['drug_id'] = df_behav['Drug'].map(drug_map)
+df_behav['drug_id'] = df_behav['drug_condition'].map(drug_map)
+#df_behav['guess_id'] = df_behav['guess'].map(guess_map)
 
 # Load first-level data
 firstlevel_dir = os.path.join(derivatives_dir, 'fMRI_analysis/firstLevel')
 glayout = BIDSLayout(firstlevel_dir, validate=False, config=['bids', 'derivatives'])
 sub_list = sorted(glayout.get_subjects())
 
-
-contr_list = list(range(1,32))
+contr_list = list(range(1, 32))
 tasks = ['phase2', 'phase3']
+
 
 def collect_task_data(task, contrast, sub_list):
     copes, varcopes = [], []
@@ -73,6 +76,8 @@ def collect_task_data(task, contrast, sub_list):
             print(f"Missing files for task-{task}, sub-{sub}, cope{contrast}")
     return copes, varcopes
 
+
+use_guess = True
 if __name__ == "__main__":
     for task in tasks:
         if task == 'phase2':
@@ -81,6 +86,7 @@ if __name__ == "__main__":
             sub_no_MRI = sub_no_MRI_phase3
         group_info_df = df_behav.loc[df_behav['subID'].isin(sub_list) & ~df_behav['subID'].isin(sub_no_MRI)]
         group_info = list(group_info_df[['subID', 'group_id', 'drug_id']].itertuples(index=False, name=None))
+        expected_subjects = len(group_info)
         task_results_dir = os.path.join(results_dir, f'task-{task}')
         task_workflow_dir = os.path.join(workflow_dir, f'task-{task}')
         os.makedirs(task_results_dir, exist_ok=True)
@@ -94,8 +100,8 @@ if __name__ == "__main__":
             os.makedirs(contrast_results_dir, exist_ok=True)
             os.makedirs(contrast_workflow_dir, exist_ok=True)
 
-            copes, varcopes = collect_task_data(task, contrast, [sub for sub, _, _ in group_info])
-            expected_subjects = len(group_info)
+            copes, varcopes = collect_task_data(
+                task, contrast,[info[0] for info in group_info])
 
             if len(copes) != expected_subjects or len(varcopes) != expected_subjects:
                 print(f"Skipping contrast {contrast}: Expected {expected_subjects} subjects, "
@@ -118,7 +124,8 @@ if __name__ == "__main__":
             print(f"Completed Data Preparation for task-{task}, contrast-{contrast}")
 
             # Clean up intermediate directories
-            intermediate_dirs = [os.path.join(contrast_workflow_dir, node) for node in ['merge_copes', 'merge_varcopes', 'resample_copes', 'resample_varcopes']]
+            intermediate_dirs = [os.path.join(contrast_workflow_dir, node) for node in
+                                 ['merge_copes', 'merge_varcopes', 'resample_copes', 'resample_varcopes']]
             for d in intermediate_dirs:
                 if os.path.exists(d):
                     shutil.rmtree(d)
