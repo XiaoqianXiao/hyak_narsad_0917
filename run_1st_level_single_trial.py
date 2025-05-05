@@ -37,18 +37,14 @@ behav_dir = os.path.join(data_dir, 'source_data', 'behav')
 scrubbed_dir = '/scrubbed_dir'
 container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 
-
 # BIDS space filter
 space = ['MNI152NLin2009cAsym']
+
 
 def create_slurm_script(sub, task, work_dir):
     """
     Write a SLURM script that will call the container's single_trial entrypoint.
     """
-    # where to store the .sh locally
-    local_work = os.path.join(work_dir, project_name, 'workflows', 'single_trial', task)
-    os.makedirs(local_work, exist_ok=True)
-
     sbatch = f"""#!/bin/bash
 #SBATCH --job-name=st_{task}_sub_{sub}
 #SBATCH --account=fang
@@ -58,8 +54,8 @@ def create_slurm_script(sub, task, work_dir):
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=40G
 #SBATCH --time=2:00:00
-#SBATCH --output={local_work}/st_{task}_sub_{sub}_%j.out
-#SBATCH --error={local_work}/st_{task}_sub_{sub}_%j.err
+#SBATCH --output={work_dir}/st_{task}_sub_{sub}_%j.out
+#SBATCH --error={work_dir}/st_{task}_sub_{sub}_%j.err
 
 module load apptainer
 
@@ -69,15 +65,13 @@ apptainer run \\
   {container_path} \\
   single_trial \\
     --subject {sub} \\
-    --task {task} \\
-    --bids_dir /data \\
-    --derivatives_dir /data/derivatives \\
-    --work_dir /scrubbed_dir
+    --task {task}
 """
-    script_path = os.path.join(local_work, f"st_sub-{sub}_task-{task}.sh")
+    script_path = os.path.join(work_dir, f"st_sub-{sub}_task-{task}.sh")
     with open(script_path, 'w') as f:
         f.write(sbatch)
     return script_path
+
 
 def run_subject_workflow(sub, task, work_dir):
     """
@@ -106,37 +100,36 @@ def run_subject_workflow(sub, task, work_dir):
 
     wf = first_level_single_trial_wf()
     # use the passed work_dir as the Nipype base_dir root
-    wf.base_dir = os.path.join(work_dir, project_name, 'workflows', 'single_trial', task, f"sub-{sub}")
-
-    wf.inputs.inputnode.func_img    = bold
-    wf.inputs.inputnode.mask_img    = mask
+    wf.base_dir = os.path.join(work_dir, f"sub-{sub}")
+    wf.inputs.inputnode.func_img = bold
+    wf.inputs.inputnode.mask_img = mask
     wf.inputs.inputnode.events_file = events
-    wf.inputs.inputnode.t_r         = tr
-    wf.inputs.inputnode.hrf_model   = 'glover'
-    wf.inputs.inputnode.out_base    = os.path.join(
+    wf.inputs.inputnode.t_r = tr
+    wf.inputs.inputnode.hrf_model = 'glover'
+    wf.inputs.inputnode.out_base = os.path.join(
         derivatives_dir, 'fMRI_analysis_single_trial', f"sub-{sub}", f"task-{task}"
     )
 
     df = pd.read_csv(events)
-    wf.inputs.inputnode.method    = ['LSA', 'LSS']
+    wf.inputs.inputnode.method = ['LSA', 'LSS']
     wf.inputs.inputnode.trial_idx = sorted(df['trial_idx'].unique())
 
     wf.run(**plugin_settings)
     print(f"Completed single-trial for sub-{sub} task-{task}")
+
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description="Run or generate SLURM scripts for single-trial first-level GLM"
     )
     p.add_argument('--subject', help="Subject ID (no 'sub-')")
-    p.add_argument('--task',    help="Task label (no 'task-')")
-    p.add_argument('--work_dir',
-                   default=os.getenv('SCRUBBED_DIR', '/scrubbed_dir'),
-                   help="Base scratch/work directory")
+    p.add_argument('--task', help="Task label (no 'task-')")
     args = p.parse_args()
 
     if args.subject and args.task:
-        run_subject_workflow(args.subject, args.task, args.work_dir)
+        run_subject_workflow(args.subject, args.task)
+        work_dir = os.path.join(scrubbed_dir, project_name, 'workflows', 'single_trial', args.task)
+        os.makedirs(work_dir, exist_ok=True)
     else:
         layout = BIDSLayout(bids_dir, validate=False, derivatives=derivatives_dir)
         query = {
@@ -146,7 +139,9 @@ if __name__ == "__main__":
             'space': space
         }
         for run in layout.get(**query):
-            sub  = run.entities['subject']
+            sub = run.entities['subject']
             task = run.entities['task']
-            script = create_slurm_script(sub, task, args.work_dir)
+            work_dir = os.path.join(scrubbed_dir, project_name, 'workflows', 'single_trial', task)
+            os.makedirs(work_dir, exist_ok=True)
+            script = create_slurm_script(sub, task, work_dir)
             print("Wrote SLURM script:", script)
