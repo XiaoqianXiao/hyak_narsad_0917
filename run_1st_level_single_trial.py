@@ -111,6 +111,9 @@ def run_subject_workflow(sub, task, work_dir):
     )
 
     df = pd.read_csv(events)
+    if 'trial_idx' not in df.columns:
+        df = df.copy()
+        df['trial_idx'] = list(range(1, len(df) + 1))
     wf.inputs.inputnode.method = ['LSA', 'LSS']
     wf.inputs.inputnode.trial_idx = sorted(df['trial_idx'].unique())
 
