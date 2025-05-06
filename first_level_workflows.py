@@ -207,6 +207,10 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     from first_level_workflows import make_session_info_lsa, make_session_info_lss
     events_df = pd.read_csv(events_file)
 
+    events_df = pd.read_csv(events_file)
+    if 'trial_idx' not in events_df.columns:
+        events_df = events_df.copy()
+        events_df['trial_idx'] = list(range(1, len(events_df) + 1))
     # Prepare session info and condition name
     if method == 'LSA':
         sess = make_session_info_lsa(events_df)
