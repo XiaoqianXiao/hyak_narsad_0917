@@ -174,47 +174,44 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
 
 def make_session_info_lsa(events_df):
     """
-    Build session info with one regressor per trial (LSA), naming each EV "t<idx>".
+    Build session info with one regressor per trial (LSA),
+    naming each EV purely by its trial_idx, e.g. "t1", "t2", ...
     """
-    from nipype.interfaces.base import Bunch
     conds, onsets, durations = [], [], []
     for _, row in events_df.iterrows():
         tid = int(row['trial_idx'])
-        conds.append(f"t{tid}")                # EV name is just the index
-        onsets.append([ row['onset'] ])       # list-of-lists
-        durations.append([ row['duration'] ])
+        conds.append(f"t{tid}")
+        onsets.append([row['onset']])
+        durations.append([row['duration']])
     return Bunch(
-        conditions = conds,
-        onsets     = onsets,
-        durations  = durations,
-        amplitudes = None
+        conditions=conds,
+        onsets=onsets,
+        durations=durations,
+        amplitudes=None
     )
 
 def make_session_info_lss(events_df, target_idx):
     """
     Build session info for LSS:
-      - EV "t<target_idx>" for the target trial
-      - EV "others" for all the rest
+      - one EV "t<target_idx>" for the target trial
+      - one EV "others" for all the rest
     """
-    from nipype.interfaces.base import Bunch
-    # mask for the target trial
+    # select target
     mask_target = (events_df['trial_idx'] == target_idx)
     if not mask_target.any():
-        raise ValueError(f"Trial {target_idx} not found in events.")
+        raise ValueError(f"Trial index {target_idx} not found in events_df")
 
-    # get onset/duration of the target
-    onset_t  = events_df.loc[mask_target,  'onset'].iloc[0]
-    duration_t = events_df.loc[mask_target, 'duration'].iloc[0]
-
-    # all the other trials
-    others_df = events_df.loc[~mask_target]
+    onset_t    = float(events_df.loc[mask_target, 'onset'].iloc[0])
+    duration_t = float(events_df.loc[mask_target, 'duration'].iloc[0])
+    others_df  = events_df.loc[~mask_target]
 
     return Bunch(
-        conditions = [ f"t{target_idx}", "others" ],
-        onsets     = [ [onset_t],       others_df['onset'].tolist()      ],
-        durations  = [ [duration_t],    others_df['duration'].tolist()   ],
-        amplitudes = None
+        conditions=['t' + str(target_idx), 'others'],
+        onsets=[[onset_t], others_df['onset'].tolist()],
+        durations=[[duration_t], others_df['duration'].tolist()],
+        amplitudes=None
     )
+
 
 
 def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, method, trial_idx, out_base):
@@ -222,27 +219,21 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     Estimate beta map for a single trial (LSA or LSS) via FILMGLS.
     Returns path to stats directory.
     """
-    import pandas as pd
-    import numpy as np
+    import os, pandas as pd, numpy as np
     from first_level_workflows import make_session_info_lsa, make_session_info_lss
     from nipype.interfaces.base import Bunch
 
     events_df = pd.read_csv(events_file)
-
-    events_df = pd.read_csv(events_file)
-    if 'trial_idx' not in events_df.columns:
-        events_df = events_df.copy()
-        events_df['trial_idx'] = list(range(1, len(events_df) + 1))
+    events_df.columns = events_df.columns.str.lower()
     # Prepare session info and condition name
     if method == 'LSA':
         sess = make_session_info_lsa(events_df)
-        idx_to_cond = {int(cond.split('_t')[-1]): cond for cond in sess.conditions}
-        cond_name = idx_to_cond[trial_idx]
+        cond_name = f"t{int(trial_idx)}"
         sess_info = sess
         prefix = f"LSA_trial_{trial_idx:03d}"
     else:
         sess_info = make_session_info_lss(events_df, trial_idx)
-        cond_name = sess_info.conditions[0]
+        cond_name = f"t{int(trial_idx)}"
         prefix = f"LSS_trial_{trial_idx:03d}"
 
     # Create design
