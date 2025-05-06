@@ -202,6 +202,8 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     Estimate beta map for a single trial (LSA or LSS) via FILMGLS.
     Returns path to stats directory.
     """
+    import pandas as pd
+    import numpy as np
     events_df = pd.read_csv(events_file)
 
     # Prepare session info and condition name
