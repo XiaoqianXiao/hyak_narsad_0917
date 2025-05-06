@@ -172,28 +172,48 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     return workflow
 
 
-# first_level_workflow for single trial estimate
-# Nipype workflow for single-trial GLM estimation (LSA & LSS) using FILMGLS
 def make_session_info_lsa(events_df):
-    """Build session info with one regressor per trial (LSA)."""
+    """
+    Build session info with one regressor per trial (LSA), naming each EV "t<idx>".
+    """
+    from nipype.interfaces.base import Bunch
     conds, onsets, durations = [], [], []
     for _, row in events_df.iterrows():
-        name = f"{row.trial_type}_t{row.trial_idx}"
-        conds.append(name)
-        onsets.append([row.onset])
-        durations.append([row.duration])
-    return Bunch(conditions=conds, onsets=onsets, durations=durations, amplitudes=None)
-
+        tid = int(row['trial_idx'])
+        conds.append(f"t{tid}")                # EV name is just the index
+        onsets.append([ row['onset'] ])       # list-of-lists
+        durations.append([ row['duration'] ])
+    return Bunch(
+        conditions = conds,
+        onsets     = onsets,
+        durations  = durations,
+        amplitudes = None
+    )
 
 def make_session_info_lss(events_df, target_idx):
-    """Build session info for target trial vs. all others combined (LSS)."""
-    target = events_df.loc[events_df.trial_idx == target_idx].iloc[0]
-    others = events_df.loc[events_df.trial_idx != target_idx]
+    """
+    Build session info for LSS:
+      - EV "t<target_idx>" for the target trial
+      - EV "others" for all the rest
+    """
+    from nipype.interfaces.base import Bunch
+    # mask for the target trial
+    mask_target = (events_df['trial_idx'] == target_idx)
+    if not mask_target.any():
+        raise ValueError(f"Trial {target_idx} not found in events.")
+
+    # get onset/duration of the target
+    onset_t  = events_df.loc[mask_target,  'onset'].iloc[0]
+    duration_t = events_df.loc[mask_target, 'duration'].iloc[0]
+
+    # all the other trials
+    others_df = events_df.loc[~mask_target]
+
     return Bunch(
-        conditions=[f"{target.trial_type}_t{target_idx}", "others"],
-        onsets=[[target.onset], others.onset.tolist()],
-        durations=[[target.duration], others.duration.tolist()],
-        amplitudes=None
+        conditions = [ f"t{target_idx}", "others" ],
+        onsets     = [ [onset_t],       others_df['onset'].tolist()      ],
+        durations  = [ [duration_t],    others_df['duration'].tolist()   ],
+        amplitudes = None
     )
 
 
@@ -205,6 +225,8 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     import pandas as pd
     import numpy as np
     from first_level_workflows import make_session_info_lsa, make_session_info_lss
+    from nipype.interfaces.base import Bunch
+
     events_df = pd.read_csv(events_file)
 
     events_df = pd.read_csv(events_file)
