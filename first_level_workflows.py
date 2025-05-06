@@ -204,6 +204,7 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     """
     import pandas as pd
     import numpy as np
+    from first_level_workflows import make_session_info_lsa, make_session_info_lss
     events_df = pd.read_csv(events_file)
 
     # Prepare session info and condition name
