@@ -130,7 +130,7 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     if args.subject and args.task:
-        work_dir = os.path.join(scrubbed_dir, project_name, 'workflows', 'single_trial', args.task)
+        work_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'single_trial', args.task)
         os.makedirs(work_dir, exist_ok=True)
         run_subject_workflow(args.subject, args.task, work_dir)
     else:
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         for run in layout.get(**query):
             sub = run.entities['subject']
             task = run.entities['task']
-            work_dir = os.path.join(scrubbed_dir, project_name, 'workflows', 'single_trial', task)
+            work_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'single_trial', task)
             os.makedirs(work_dir, exist_ok=True)
             script = create_slurm_script(sub, task, work_dir)
             print("Wrote SLURM script:", script)
