@@ -110,7 +110,7 @@ def run_subject_workflow(sub, task, work_dir):
         derivatives_dir, 'fMRI_analysis_single_trial', f"sub-{sub}", f"task-{task}"
     )
 
-    df = pd.read_csv(events)
+    df = pd.read_csv(events, sep='\t')
     if 'trial_idx' not in df.columns:
         df = df.copy()
         df['trial_idx'] = list(range(1, len(df) + 1))
