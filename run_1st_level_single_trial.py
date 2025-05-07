@@ -98,12 +98,9 @@ def run_subject_workflow(sub, task, work_dir):
     if not os.path.exists(events):
         raise FileNotFoundError(f"Events file missing: {events}")
 
-    methods_to_run = ['LSA', 'LSS']  # or ['LSA'] or ['LSS']
+    #methods_to_run = ['LSA', 'LSS']  # or ['LSA'] or ['LSS']
 
-    wf = first_level_single_trial_wf(
-        methods=methods_to_run,
-        name='single_trial_wf'
-    )
+    wf = first_level_single_trial_wf()
     wf.base_dir = work_dir
     wf.inputs.inputnode.func_img = bold
     wf.inputs.inputnode.mask_img = mask

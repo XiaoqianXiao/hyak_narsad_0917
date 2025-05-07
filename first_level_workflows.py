@@ -219,33 +219,25 @@ def make_session_info_lss(events_df, target_idx):
     )
 
 
-
-def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, method, trial_idx, out_base):
+def estimate_single_trial(func_img, mask_img, events_file,
+                          t_r, hrf_model, method, trial_idx, out_base):
     """
-    Estimate beta map for a single trial (LSA or LSS) via FILMGLS.
-    Returns path to stats directory.
+    Compute design & FILMGLS for a single trial via LSA or LSS.
     """
-    import os, pandas as pd, numpy as np
-    from first_level_workflows import make_session_info_lsa, make_session_info_lss
-    from nipype.interfaces.base import Bunch
-
-    events_df = pd.read_csv(events_file, sep='\t')
-    events_df.columns = events_df.columns.str.lower()
-    # Prepare session info and condition name
+    # read events (assume comma‐delimited)
+    events_df = pd.read_csv(events_file)
+    # pick session info
     if method == 'LSA':
-        sess = make_session_info_lsa(events_df)
-        cond_name = f"t{int(trial_idx)}"
-        sess_info = sess
-        prefix = f"LSA_trial_{trial_idx:03d}"
+        sess_info = make_session_info_lsa(events_df)
+        prefix    = f"LSA_trial_{int(trial_idx):03d}"
     else:
         sess_info = make_session_info_lss(events_df, trial_idx)
-        cond_name = f"t{int(trial_idx)}"
-        prefix = f"LSS_trial_{trial_idx:03d}"
+        prefix    = f"LSS_trial_{int(trial_idx):03d}"
 
-    # Create design
+    # write design
     design_dir = os.path.join(out_base, prefix, 'design')
     os.makedirs(design_dir, exist_ok=True)
-    level1 = Level1Design(
+    l1 = Level1Design(
         interscan_interval=t_r,
         bases={hrf_model: {'derivs': False}},
         session_info=[sess_info],
@@ -253,20 +245,18 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
         model_serial_correlations=True,
         film_threshold=1000,
         run_mode='fe',
-        contrast_info=[(f"beta_{cond_name}", 'T', [cond_name], [1.0])],
+        contrast_info=[(f"beta_t{int(trial_idx)}", 'T', [f"t{int(trial_idx)}"], [1.0])],
         output_dir=design_dir
     )
-    res1 = level1.run()
+    res = l1.run()
 
-    # Run FILMGLS
-    mat_file = res1.outputs.design_mat
-    con_file = res1.outputs.design_con
+    # run FILMGLS
     stats_dir = os.path.join(out_base, prefix, 'stats')
     os.makedirs(stats_dir, exist_ok=True)
     film = FILMGLS(
         in_file=func_img,
-        design_file=mat_file,
-        contrast_file=con_file,
+        design_file=res.outputs.design_mat,
+        contrast_file=res.outputs.design_con,
         mask_file=mask_img,
         out_dir_file=stats_dir
     )
@@ -274,58 +264,52 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     return stats_dir
 
 
-from nipype.pipeline import engine as pe
-from nipype.pipeline.engine import Workflow, Node, MapNode
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.fsl import Level1Design, FILMGLS
-import os
-
-
-def first_level_single_trial_wf(
-        methods=('LSA', 'LSS'),
-        name='single_trial_wf'
-):
-    """
-    Build a workflow that will run single‐trial LSA and/or LSS.
-    `methods` should be a tuple or list containing any of 'LSA','LSS'.
-    """
+def first_level_single_trial_wf(name='single_trial_wf'):
     wf = Workflow(name=name)
 
-    # The only things we need to feed in at runtime:
+    # inputs
     inputnode = Node(IdentityInterface(fields=[
-        'func_img', 'mask_img', 'events_file',
-        't_r', 'hrf_model', 'trial_idx', 'out_base'
+        'func_img','mask_img','events_file','t_r','hrf_model','trial_idx','out_base'
     ]), name='inputnode')
 
-    # For each requested method make a MapNode that iterates only over trial_idx.
-    for meth in methods:
-        est = MapNode(
-            Function(
-                input_names=[
-                    'func_img', 'mask_img', 'events_file',
-                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
-                ],
-                output_names=['stats_dir'],
-                function=estimate_single_trial  # your existing function
-            ),
-            iterfield=['trial_idx'],
-            name=f'est_{meth}'
-        )
-        # fix this node’s method input
-        est.inputs.method = meth
+    # MapNode for **LSA** (only iterating trial_idx)
+    est_LSA = MapNode(
+        Function(
+            input_names=['func_img','mask_img','events_file','t_r','hrf_model','method','trial_idx','out_base'],
+            output_names=['stats_dir'],
+            function=estimate_single_trial
+        ),
+        iterfield=['trial_idx'],
+        name='est_LSA'
+    )
+    est_LSA.inputs.method = 'LSA'
 
-        # connect everything but method (it’s already set)
-        wf.connect([
-            (inputnode, est, [
-                ('func_img', 'func_img'),
-                ('mask_img', 'mask_img'),
-                ('events_file', 'events_file'),
-                ('t_r', 't_r'),
-                ('hrf_model', 'hrf_model'),
-                ('trial_idx', 'trial_idx'),
-                ('out_base', 'out_base'),
-            ])
-        ])
+    # MapNode for **LSS**
+    est_LSS = MapNode(
+        Function(
+            input_names=['func_img','mask_img','events_file','t_r','hrf_model','method','trial_idx','out_base'],
+            output_names=['stats_dir'],
+            function=estimate_single_trial
+        ),
+        iterfield=['trial_idx'],
+        name='est_LSS'
+    )
+    est_LSS.inputs.method = 'LSS'
+
+    # connect both
+    wf.connect([
+        (inputnode, est_LSA, [
+            ('func_img','func_img'), ('mask_img','mask_img'),
+            ('events_file','events_file'), ('t_r','t_r'),
+            ('hrf_model','hrf_model'), ('trial_idx','trial_idx'),
+            ('out_base','out_base')
+        ]),
+        (inputnode, est_LSS, [
+            ('func_img','func_img'), ('mask_img','mask_img'),
+            ('events_file','events_file'), ('t_r','t_r'),
+            ('hrf_model','hrf_model'), ('trial_idx','trial_idx'),
+            ('out_base','out_base')
+        ]),
+    ])
 
     return wf
-
