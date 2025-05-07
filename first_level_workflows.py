@@ -174,41 +174,47 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
 
 def make_session_info_lsa(events_df):
     """
-    Build session info with one regressor per trial (LSA),
-    naming each EV purely by its trial_idx, e.g. "t1", "t2", ...
+    Build LSA session info:  one regressor per trial, named 't1','t2',...
+    Uses only trial_idx and onset/duration.
     """
-    conds, onsets, durations = [], [], []
-    for _, row in events_df.iterrows():
-        tid = int(row['trial_idx'])
-        conds.append(f"t{tid}")
-        onsets.append([row['onset']])
-        durations.append([row['duration']])
-    return Bunch(
-        conditions=conds,
-        onsets=onsets,
-        durations=durations,
-        amplitudes=None
-    )
+    # lowercase columns
+    events_df.columns = events_df.columns.str.lower()
+    # inject trial_idx if missing
+    if 'trial_idx' not in events_df.columns:
+        events_df = events_df.reset_index(drop=True)
+        events_df['trial_idx'] = np.arange(len(events_df)) + 1
+
+    conds     = [f"t{int(i)}" for i in events_df['trial_idx']]
+    onsets    = [[float(x)] for x in events_df['onset']]
+    durations = [[float(x)] for x in events_df['duration']]
+    return Bunch(conditions=conds,
+                 onsets=onsets,
+                 durations=durations,
+                 amplitudes=None)
+
 
 def make_session_info_lss(events_df, target_idx):
     """
-    Build session info for LSS:
-      - one EV "t<target_idx>" for the target trial
-      - one EV "others" for all the rest
+    Build LSS session info:  one EV 't<target_idx>' for the target trial,
+    one EV 'others' for all the rest.
     """
-    # select target
-    mask_target = (events_df['trial_idx'] == target_idx)
-    if not mask_target.any():
-        raise ValueError(f"Trial index {target_idx} not found in events_df")
+    events_df.columns = events_df.columns.str.lower()
+    if 'trial_idx' not in events_df.columns:
+        events_df = events_df.reset_index(drop=True)
+        events_df['trial_idx'] = np.arange(len(events_df)) + 1
 
-    onset_t    = float(events_df.loc[mask_target, 'onset'].iloc[0])
-    duration_t = float(events_df.loc[mask_target, 'duration'].iloc[0])
-    others_df  = events_df.loc[~mask_target]
-
+    mask_t = events_df['trial_idx'] == target_idx
+    if not mask_t.any():
+        raise ValueError(f"Trial {target_idx} not found")
+    # target
+    onset_t    = float(events_df.loc[mask_t,   'onset'].iloc[0])
+    duration_t = float(events_df.loc[mask_t,  'duration'].iloc[0])
+    # others
+    others     = events_df.loc[~mask_t]
     return Bunch(
-        conditions=['t' + str(target_idx), 'others'],
-        onsets=[[onset_t], others_df['onset'].tolist()],
-        durations=[[duration_t], others_df['duration'].tolist()],
+        conditions=[f"t{target_idx}", "others"],
+        onsets=[[onset_t],     others['onset'].tolist()],
+        durations=[[duration_t], others['duration'].tolist()],
         amplitudes=None
     )
 
