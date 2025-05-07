@@ -224,6 +224,9 @@ def estimate_single_trial(func_img, mask_img, events_file,
     """
     Compute design & FILMGLS for a single trial via LSA or LSS.
     """
+    import os
+    import pandas as pd
+    import numpy as np
     # read events (assume comma‐delimited)
     events_df = pd.read_csv(events_file)
     # pick session info
