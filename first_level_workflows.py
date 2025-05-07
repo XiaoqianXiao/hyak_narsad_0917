@@ -269,43 +269,67 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
 
 
 def first_level_single_trial_wf(name='single_trial_wf'):
-    """Builds Nipype Workflow to run single-trial LSA & LSS GLM estimations."""
     wf = Workflow(name=name)
 
-    # Input spec
+    # 1) Input spec
     inputnode = Node(
         IdentityInterface(fields=[
             'func_img', 'mask_img', 'events_file',
-            't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
+            't_r', 'hrf_model', 'trial_idx', 'out_base'
         ]),
         name='inputnode'
     )
 
-    # Trial estimation node
-    est_node = MapNode(
-            Function(
-                    input_names = [
-                    'func_img', 'mask_img', 'events_file',
-                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'],
-            output_names = ['stats_dir'],
-            function = estimate_single_trial
-                    ),
-        iterfield = ['method', 'trial_idx'],
-        name = 'estimate_single_trial'
-                   )
+    # 2) LSA MapNode
+    lsa = MapNode(
+        Function(
+            input_names=[
+                'func_img','mask_img','events_file',
+                't_r','hrf_model','method','trial_idx','out_base'
+            ],
+            output_names=['stats_dir'],
+            function=estimate_single_trial
+        ),
+        iterfield=['trial_idx'],
+        name='lsa'
+    )
+    lsa.inputs.method = 'LSA'  # fixed
 
-    # Connect nodes
+    # 3) LSS MapNode
+    lss = MapNode(
+        Function(
+            input_names=[
+                'func_img','mask_img','events_file',
+                't_r','hrf_model','method','trial_idx','out_base'
+            ],
+            output_names=['stats_dir'],
+            function=estimate_single_trial
+        ),
+        iterfield=['trial_idx'],
+        name='lss'
+    )
+    lss.inputs.method = 'LSS'  # fixed
+
+    # 4) Connect inputs into both branches
     wf.connect([
-        (inputnode, est_node, [
-            ('func_img', 'func_img'),
-            ('mask_img', 'mask_img'),
-            ('events_file', 'events_file'),
-            ('t_r', 't_r'),
-            ('hrf_model', 'hrf_model'),
-            ('method', 'method'),
-            ('trial_idx', 'trial_idx'),
-            ('out_base', 'out_base')
-        ])
+        (inputnode, lsa, [
+            ('func_img','func_img'),
+            ('mask_img','mask_img'),
+            ('events_file','events_file'),
+            ('t_r','t_r'),
+            ('hrf_model','hrf_model'),
+            ('trial_idx','trial_idx'),
+            ('out_base','out_base')
+        ]),
+        (inputnode, lss, [
+            ('func_img','func_img'),
+            ('mask_img','mask_img'),
+            ('events_file','events_file'),
+            ('t_r','t_r'),
+            ('hrf_model','hrf_model'),
+            ('trial_idx','trial_idx'),
+            ('out_base','out_base')
+        ]),
     ])
 
     return wf
