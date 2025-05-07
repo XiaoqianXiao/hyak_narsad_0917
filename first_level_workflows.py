@@ -286,8 +286,7 @@ def first_level_single_trial_wf(name='single_trial_wf'):
             Function(
                     input_names = [
                     'func_img', 'mask_img', 'events_file',
-                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
-                                                                +],
+                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'],
             output_names = ['stats_dir'],
             function = estimate_single_trial
                     ),
