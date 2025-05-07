@@ -177,6 +177,7 @@ def make_session_info_lsa(events_df):
     Build LSA session info:  one regressor per trial, named 't1','t2',...
     Uses only trial_idx and onset/duration.
     """
+    import numpy as np
     # lowercase columns
     events_df.columns = events_df.columns.str.lower()
     # inject trial_idx if missing
@@ -198,6 +199,7 @@ def make_session_info_lss(events_df, target_idx):
     Build LSS session info:  one EV 't<target_idx>' for the target trial,
     one EV 'others' for all the rest.
     """
+    import numpy as np
     events_df.columns = events_df.columns.str.lower()
     if 'trial_idx' not in events_df.columns:
         events_df = events_df.reset_index(drop=True)
