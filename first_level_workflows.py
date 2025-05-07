@@ -225,8 +225,6 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
 
     events_df = pd.read_csv(events_file, sep='\t')
     events_df.columns = events_df.columns.str.lower()
-    if 'trial_idx' not in events_df.columns:
-        events_df['trial_idx'] = range(1, len(events_df) + 1)
     # Prepare session info and condition name
     if method == 'LSA':
         sess = make_session_info_lsa(events_df)
