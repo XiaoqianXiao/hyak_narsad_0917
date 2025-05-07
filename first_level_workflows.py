@@ -1,5 +1,5 @@
 from nipype.pipeline import engine as pe
-from nipype.pipeline.engine import Workflow, Node
+from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
@@ -282,17 +282,18 @@ def first_level_single_trial_wf(name='single_trial_wf'):
     )
 
     # Trial estimation node
-    est_node = Node(
-        Function(
-            input_names=[
-                'func_img', 'mask_img', 'events_file',
-                't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
-            ],
-            output_names=['stats_dir'],
-            function=estimate_single_trial
-        ),
-        name='estimate_single_trial'
-    )
+    est_node = MapNode(
+            Function(
+                    input_names = [
+                    'func_img', 'mask_img', 'events_file',
+                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
+                                                                +],
+            output_names = ['stats_dir'],
+            function = estimate_single_trial
+                    ),
+        iterfield = ['method', 'trial_idx'],
+        name = 'estimate_single_trial'
+                   )
 
     # Connect nodes
     wf.connect([
