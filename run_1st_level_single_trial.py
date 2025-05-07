@@ -110,8 +110,14 @@ def run_subject_workflow(sub, task, work_dir):
     wf.inputs.inputnode.events_file = events
     wf.inputs.inputnode.t_r = tr
     wf.inputs.inputnode.hrf_model = 'glover'
+    df = pd.read_csv(events, sep='\t')
+    if 'trial_idx' not in df.columns:
+        df = df.copy()
+        df['trial_idx'] = list(range(1, len(df) + 1))
     wf.inputs.inputnode.trial_idx = sorted(df['trial_idx'].unique())
-    wf.inputs.inputnode.out_base = out_base
+    wf.inputs.inputnode.out_base = os.path.join(
+         derivatives_dir, 'fMRI_analysis_single_trial', f"sub-{sub}", f"task-{task}"
+     )
 
     wf.run(**plugin_settings)
     print(f"Completed single-trial for sub-{sub} task-{task}")
