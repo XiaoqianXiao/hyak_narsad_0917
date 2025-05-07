@@ -268,68 +268,58 @@ def estimate_single_trial(func_img, mask_img, events_file, t_r, hrf_model, metho
     return stats_dir
 
 
-def first_level_single_trial_wf(name='single_trial_wf'):
+from nipype.pipeline import engine as pe
+from nipype.pipeline.engine import Workflow, Node, MapNode
+from nipype.interfaces.utility import IdentityInterface, Function
+from nipype.interfaces.fsl import Level1Design, FILMGLS
+import os
+
+
+def first_level_single_trial_wf(
+        methods=('LSA', 'LSS'),
+        name='single_trial_wf'
+):
+    """
+    Build a workflow that will run single‐trial LSA and/or LSS.
+    `methods` should be a tuple or list containing any of 'LSA','LSS'.
+    """
     wf = Workflow(name=name)
 
-    # 1) Input spec
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'func_img', 'mask_img', 'events_file',
-            't_r', 'hrf_model', 'trial_idx', 'out_base'
-        ]),
-        name='inputnode'
-    )
+    # The only things we need to feed in at runtime:
+    inputnode = Node(IdentityInterface(fields=[
+        'func_img', 'mask_img', 'events_file',
+        't_r', 'hrf_model', 'trial_idx', 'out_base'
+    ]), name='inputnode')
 
-    # 2) LSA MapNode
-    lsa = MapNode(
-        Function(
-            input_names=[
-                'func_img','mask_img','events_file',
-                't_r','hrf_model','method','trial_idx','out_base'
-            ],
-            output_names=['stats_dir'],
-            function=estimate_single_trial
-        ),
-        iterfield=['trial_idx'],
-        name='lsa'
-    )
-    lsa.inputs.method = 'LSA'  # fixed
+    # For each requested method make a MapNode that iterates only over trial_idx.
+    for meth in methods:
+        est = MapNode(
+            Function(
+                input_names=[
+                    'func_img', 'mask_img', 'events_file',
+                    't_r', 'hrf_model', 'method', 'trial_idx', 'out_base'
+                ],
+                output_names=['stats_dir'],
+                function=estimate_single_trial  # your existing function
+            ),
+            iterfield=['trial_idx'],
+            name=f'est_{meth}'
+        )
+        # fix this node’s method input
+        est.inputs.method = meth
 
-    # 3) LSS MapNode
-    lss = MapNode(
-        Function(
-            input_names=[
-                'func_img','mask_img','events_file',
-                't_r','hrf_model','method','trial_idx','out_base'
-            ],
-            output_names=['stats_dir'],
-            function=estimate_single_trial
-        ),
-        iterfield=['trial_idx'],
-        name='lss'
-    )
-    lss.inputs.method = 'LSS'  # fixed
-
-    # 4) Connect inputs into both branches
-    wf.connect([
-        (inputnode, lsa, [
-            ('func_img','func_img'),
-            ('mask_img','mask_img'),
-            ('events_file','events_file'),
-            ('t_r','t_r'),
-            ('hrf_model','hrf_model'),
-            ('trial_idx','trial_idx'),
-            ('out_base','out_base')
-        ]),
-        (inputnode, lss, [
-            ('func_img','func_img'),
-            ('mask_img','mask_img'),
-            ('events_file','events_file'),
-            ('t_r','t_r'),
-            ('hrf_model','hrf_model'),
-            ('trial_idx','trial_idx'),
-            ('out_base','out_base')
-        ]),
-    ])
+        # connect everything but method (it’s already set)
+        wf.connect([
+            (inputnode, est, [
+                ('func_img', 'func_img'),
+                ('mask_img', 'mask_img'),
+                ('events_file', 'events_file'),
+                ('t_r', 't_r'),
+                ('hrf_model', 'hrf_model'),
+                ('trial_idx', 'trial_idx'),
+                ('out_base', 'out_base'),
+            ])
+        ])
 
     return wf
+

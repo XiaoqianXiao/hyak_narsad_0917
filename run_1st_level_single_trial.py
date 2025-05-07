@@ -98,24 +98,20 @@ def run_subject_workflow(sub, task, work_dir):
     if not os.path.exists(events):
         raise FileNotFoundError(f"Events file missing: {events}")
 
-    wf = first_level_single_trial_wf()
-    # use the passed work_dir as the Nipype base_dir root
-    wf.base_dir = os.path.join(work_dir, f"sub-{sub}")
+    methods_to_run = ['LSA', 'LSS']  # or ['LSA'] or ['LSS']
+
+    wf = first_level_single_trial_wf(
+        methods=methods_to_run,
+        name='single_trial_wf'
+    )
+    wf.base_dir = work_dir
     wf.inputs.inputnode.func_img = bold
     wf.inputs.inputnode.mask_img = mask
     wf.inputs.inputnode.events_file = events
     wf.inputs.inputnode.t_r = tr
     wf.inputs.inputnode.hrf_model = 'glover'
-    wf.inputs.inputnode.out_base = os.path.join(
-        derivatives_dir, 'fMRI_analysis_single_trial', f"sub-{sub}", f"task-{task}"
-    )
-
-    df  = pd.read_csv(events, sep='\t')
-    if 'trial_idx' not in df.columns:
-        df = df.copy()
-        df['trial_idx'] = list(range(1, len(df) + 1))
-    wf.inputs.inputnode.method = ['LSA', 'LSS']
     wf.inputs.inputnode.trial_idx = sorted(df['trial_idx'].unique())
+    wf.inputs.inputnode.out_base = out_base
 
     wf.run(**plugin_settings)
     print(f"Completed single-trial for sub-{sub} task-{task}")
