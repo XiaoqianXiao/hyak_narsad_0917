@@ -230,6 +230,7 @@ def estimate_single_trial(func_img, mask_img, events_file,
     import pandas as pd
     import numpy as np
     from first_level_workflows import make_session_info_lsa, make_session_info_lss
+    from nipype.interfaces.fsl import Level1Design, FILMGLS
     # read events (assume comma‐delimited)
     events_df = pd.read_csv(events_file, sep='\t')
     # pick session info
