@@ -231,7 +231,7 @@ def estimate_single_trial(func_img, mask_img, events_file,
     import numpy as np
     from first_level_workflows import make_session_info_lsa, make_session_info_lss
     # read events (assume comma‐delimited)
-    events_df = pd.read_csv(events_file)
+    events_df = pd.read_csv(events_file, sep='\t')
     # pick session info
     if method == 'LSA':
         sess_info = make_session_info_lsa(events_df)
