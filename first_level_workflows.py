@@ -246,9 +246,9 @@ def estimate_single_trial(func_img, mask_img, events_file,
     os.makedirs(design_dir, exist_ok=True)
     l1 = Level1Design(
         interscan_interval=t_r,
-        bases={'dgamma': {'derivs': True}},
+        bases={hrf_model: {'derivs': True}},
         session_info=[sess_info],
-        mask_image=mask_img,
+        mask_file=mask_img,
         model_serial_correlations=True,
         film_threshold=1000,
         run_mode='fe',

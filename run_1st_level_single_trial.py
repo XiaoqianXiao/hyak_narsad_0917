@@ -106,7 +106,7 @@ def run_subject_workflow(sub, task, work_dir):
     wf.inputs.inputnode.mask_img = mask
     wf.inputs.inputnode.events_file = events
     wf.inputs.inputnode.t_r = tr
-    wf.inputs.inputnode.hrf_model = 'glover'
+    wf.inputs.inputnode.hrf_model = 'dgamma'
     df = pd.read_csv(events, sep='\t')
     if 'trial_idx' not in df.columns:
         df = df.copy()
