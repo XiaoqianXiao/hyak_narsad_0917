@@ -1,5 +1,5 @@
+#Nipype v1.10.0.
 from nipype.pipeline import engine as pe
-from nipype.pipeline.engine import Workflow, Node, MapNode
 from nipype.algorithms.modelgen import SpecifyModel
 from nipype.interfaces import fsl, utility as niu, io as nio
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
@@ -172,150 +172,158 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     return workflow
 
 
-def make_session_info_lsa(events_df):
+def make_trial_info_lss(events_df, target_idx):
     """
-    Build LSA session info:  one regressor per trial, named 't1','t2',...
-    Uses only trial_idx and onset/duration.
+    Create session_info for LSS: one EV for the target trial, one for all others.
     """
-    import numpy as np
-    # lowercase columns
-    events_df.columns = events_df.columns.str.lower()
-    # inject trial_idx if missing
-    if 'trial_idx' not in events_df.columns:
-        events_df = events_df.reset_index(drop=True)
-        events_df['trial_idx'] = np.arange(len(events_df)) + 1
-
-    conds     = [f"t{int(i)}" for i in events_df['trial_idx']]
-    onsets    = [[float(x)] for x in events_df['onset']]
-    durations = [[float(x)] for x in events_df['duration']]
-    return Bunch(conditions=conds,
-                 onsets=onsets,
-                 durations=durations,
-                 amplitudes=None)
-
-
-def make_session_info_lss(events_df, target_idx):
-    """
-    Build LSS session info:  one EV 't<target_idx>' for the target trial,
-    one EV 'others' for all the rest.
-    """
-    import numpy as np
-    events_df.columns = events_df.columns.str.lower()
-    if 'trial_idx' not in events_df.columns:
-        events_df = events_df.reset_index(drop=True)
-        events_df['trial_idx'] = np.arange(len(events_df)) + 1
-
-    mask_t = events_df['trial_idx'] == target_idx
-    if not mask_t.any():
-        raise ValueError(f"Trial {target_idx} not found")
-    # target
-    onset_t    = float(events_df.loc[mask_t,   'onset'].iloc[0])
-    duration_t = float(events_df.loc[mask_t,  'duration'].iloc[0])
-    # others
-    others     = events_df.loc[~mask_t]
+    row = events_df[events_df['trial_idx'] == target_idx]
+    if row.empty:
+        raise ValueError(f"Trial {target_idx} not found in events file.")
+    onset, duration = row[['onset', 'duration']].iloc[0].astype(float)
+    others = events_df[events_df['trial_idx'] != target_idx]
     return Bunch(
         conditions=[f"t{target_idx}", "others"],
-        onsets=[[onset_t],     others['onset'].tolist()],
-        durations=[[duration_t], others['duration'].tolist()],
+        onsets=[[onset], others['onset'].tolist()],
+        durations=[[duration], others['duration'].tolist()],
         amplitudes=None
     )
 
 
-def estimate_single_trial(func_img, mask_img, events_file,
-                          t_r, hrf_model, method, trial_idx, out_base):
+def get_trial_idxs(events_file):
     """
-    Compute design & FILMGLS for a single trial via LSA or LSS.
+    Return sorted unique trial indices from an events TSV file.
     """
-    import os
-    import pandas as pd
-    import numpy as np
-    from first_level_workflows import make_session_info_lsa, make_session_info_lss
-    from nipype.interfaces.fsl import Level1Design, FILMGLS
-    # read events (assume comma‐delimited)
-    events_df = pd.read_csv(events_file, sep='\t')
-    # pick session info
-    if method == 'LSA':
-        sess_info = make_session_info_lsa(events_df)
-        prefix    = f"LSA_trial_{int(trial_idx):03d}"
-    else:
-        sess_info = make_session_info_lss(events_df, trial_idx)
-        prefix    = f"LSS_trial_{int(trial_idx):03d}"
-
-    # write design
-    design_dir = os.path.join(out_base, prefix, 'design')
-    os.makedirs(design_dir, exist_ok=True)
-    l1 = Level1Design(
-        interscan_interval=t_r,
-        bases={hrf_model: {'derivs': True}},
-        session_info=[sess_info],
-        model_serial_correlations=True,
-        film_threshold=1000,
-        run_mode='fe',
-        contrast_info=[(f"beta_t{int(trial_idx)}", 'T', [f"t{int(trial_idx)}"], [1.0])],
-        output_dir=design_dir
-    )
-    res = l1.run()
-
-    # run FILMGLS
-    stats_dir = os.path.join(out_base, prefix, 'stats')
-    os.makedirs(stats_dir, exist_ok=True)
-    film = FILMGLS(
-        in_file=func_img,
-        design_file=res.outputs.design_mat,
-        contrast_file=res.outputs.design_con,
-        mask_file=mask_img,
-        out_dir_file=stats_dir
-    )
-    film.run()
-    return stats_dir
+    df = pd.read_csv(events_file, sep='\t')
+    if 'trial_idx' not in df.columns:
+        df['trial_idx'] = range(1, len(df) + 1)
+    return sorted(df['trial_idx'].unique())
 
 
-def first_level_single_trial_wf(name='single_trial_wf'):
-    wf = Workflow(name=name)
+def first_level_single_trial_LSS_wf(in_files, output_dir, hrf_model='dgamma'):
+    wf = pe.Workflow('wf_single_trial_LSS')
+    wf.config['execution']['use_relative_paths'] = True
+    wf.config['execution']['remove_unnecessary_outputs'] = False
 
-    # inputs
-    inputnode = Node(IdentityInterface(fields=[
-        'func_img','mask_img','events_file','t_r','hrf_model','trial_idx','out_base'
-    ]), name='inputnode')
-
-    # MapNode for **LSA** (only iterating trial_idx)
-    est_LSA = MapNode(
+    # 1) Datasource: unpack per-subject inputs
+    datasource = pe.Node(
         Function(
-            input_names=['func_img','mask_img','events_file','t_r','hrf_model','method','trial_idx','out_base'],
-            output_names=['stats_dir'],
-            function=estimate_single_trial
-        ),
-        iterfield=['trial_idx'],
-        name='est_LSA'
-    )
-    est_LSA.inputs.method = 'LSA'
+            input_names=['in_dict'],
+            output_names=['bold', 'mask', 'events', 'regressors', 'tr'],
+            function=_dict_ds
+        ), name='datasource')
+    datasource.inputs.in_dict = in_files
+    datasource.iterables = ('sub', sorted(in_files.keys()))
 
-    # MapNode for **LSS**
-    est_LSS = MapNode(
+    # 2) Apply brain mask
+    apply_mask = pe.Node(ApplyMask(), name='apply_mask')
+
+    # 3) Extract confounds (motion etc.)
+    runinfo = pe.Node(
+        niu.Function(
+            input_names=['in_file', 'events_file', 'regressors_file', 'regressors_names'],
+            output_names=['info', 'realign_file'],
+            function=_bids2nipypeinfo
+        ), name='runinfo')
+    runinfo.inputs.regressors_names = [
+        'dvars', 'framewise_displacement',
+        *[f'a_comp_cor_{i:02d}' for i in range(6)],
+        *[f'cosine{i:02d}' for i in range(4)]
+    ]
+
+    # 4) Enumerate trial indices
+    trial_node = pe.Node(
         Function(
-            input_names=['func_img','mask_img','events_file','t_r','hrf_model','method','trial_idx','out_base'],
-            output_names=['stats_dir'],
-            function=estimate_single_trial
-        ),
-        iterfield=['trial_idx'],
-        name='est_LSS'
-    )
-    est_LSS.inputs.method = 'LSS'
+            input_names=['events_file'],
+            output_names=['trial_idx_list'],
+            function=get_trial_idxs
+        ), name='get_trial_idxs')
 
-    # connect both
+    # 5) Build per-trial session_info for LSS directly
+    lss_info = pe.MapNode(
+        Function(
+            input_names=['events_file', 'trial_idx'],
+            output_names=['trial_info'],
+            function=make_trial_info_lss
+        ), name='lss_info',
+        iterfield=['trial_idx']
+    )
+
+    # 6) SpecifyModel: create fsf and EV files per trial
+    l1_spec = pe.MapNode(
+        SpecifyModel(
+            parameter_source='FSL',
+            input_units='secs',
+            high_pass_filter_cutoff=100
+        ), name='l1_spec',
+        iterfield=['trial_info', 'realignment_parameters']
+    )
+
+    # 7) Level1Design: generate design matrices
+    l1_model = pe.MapNode(
+        fsl.Level1Design(
+            bases={hrf_model: {'derivs': True}},
+            model_serial_correlations=True,
+            contrasts=[('t', 'T', ['t'], [1.0])]
+        ), name='l1_model',
+        iterfield=['session_info']
+    )
+
+    # 8) FEATModel: produce design.mat and design.con
+    feat_spec = pe.MapNode(
+        fsl.FEATModel(), name='feat_spec',
+        iterfield=['fsf_file', 'ev_files']
+    )
+
+    # 9) run FEAT
+    feat_fit = pe.MapNode(
+        FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit',
+        iterfield=['design_file', 'tcon_file', 'in_file']
+    )
+
+    # 10) Select and sink copes/varcopes
+    feat_select = pe.Node(
+        nio.SelectFiles({**{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 2)},
+                     **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 2)}}),
+        name='feat_select'
+    )
+    ds_copes = [
+        pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'cope{i}'),
+             name=f'ds_cope{i}', run_without_submitting=True)
+        for i in range(1, 2)
+    ]
+    ds_varcopes = [
+        pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'varcope{i}'),
+             name=f'ds_varcope{i}', run_without_submitting=True)
+        for i in range(1, 2)
+    ]
+
+    # -- Connect nodes ---------------------------------------------------------
     wf.connect([
-        (inputnode, est_LSA, [
-            ('func_img','func_img'), ('mask_img','mask_img'),
-            ('events_file','events_file'), ('t_r','t_r'),
-            ('hrf_model','hrf_model'), ('trial_idx','trial_idx'),
-            ('out_base','out_base')
-        ]),
-        (inputnode, est_LSS, [
-            ('func_img','func_img'), ('mask_img','mask_img'),
-            ('events_file','events_file'), ('t_r','t_r'),
-            ('hrf_model','hrf_model'), ('trial_idx','trial_idx'),
-            ('out_base','out_base')
-        ]),
+        (datasource, apply_mask, [('bold', 'in_file'), ('mask', 'mask_file')]),
+        (apply_mask, runinfo, [('out_file', 'in_file')]),
+        (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
+
+        (datasource, trial_node, [('events', 'events_file')]),
+        (trial_node, lss_info, [('trial_idx_list', 'trial_idx')]),
+        (datasource, lss_info, [('events', 'events_file')]),
+
+        (lss_info, l1_spec, [('trial_info', 'trial_info')]),
+        (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
+        (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
+
+        (l1_spec, l1_model, [('session_info', 'session_info')]),
+        (datasource, l1_model, [('tr', 'interscan_interval')]),
+        (apply_mask, l1_model, [('out_file', 'in_file')]),
+
+        (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
+        (apply_mask, feat_spec, [('out_file', 'in_file')]),
+
+        (feat_spec, feat_fit, [('design_file', 'design_file'), ('tcon_file', 'tcon_file')]),
+        (apply_mask, feat_fit, [('out_file', 'in_file')]),
+
+        (feat_fit, feat_select, [('results_dir', 'base_directory')]),
+        *[(feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')]) for i in range(1, 2)],
+        *[(feat_select, ds_varcopes[i - 1], [(f'varcope{i}', 'in_file')]) for i in range(1, 2)],
     ])
 
     return wf
