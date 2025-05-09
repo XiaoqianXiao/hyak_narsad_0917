@@ -199,7 +199,7 @@ def get_trial_idxs(events_file):
     return sorted(df['trial_idx'].unique())
 
 
-def first_level_single_trial_LSS_wf(in_files, output_dir, hrf_model='dgamma'):
+def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     wf = pe.Workflow('wf_single_trial_LSS')
     wf.config['execution']['use_relative_paths'] = True
     wf.config['execution']['remove_unnecessary_outputs'] = False
@@ -211,8 +211,8 @@ def first_level_single_trial_LSS_wf(in_files, output_dir, hrf_model='dgamma'):
             output_names=['bold', 'mask', 'events', 'regressors', 'tr'],
             function=_dict_ds
         ), name='datasource')
-    datasource.inputs.in_dict = in_files
-    datasource.iterables = ('sub', sorted(in_files.keys()))
+    datasource.inputs.in_dict = inputs
+    datasource.iterables = ('sub', sorted(inputs.keys()))
 
     # 2) Apply brain mask
     apply_mask = pe.Node(ApplyMask(), name='apply_mask')
@@ -220,7 +220,7 @@ def first_level_single_trial_LSS_wf(in_files, output_dir, hrf_model='dgamma'):
     # 3) Extract confounds (motion etc.)
     runinfo = pe.Node(
         niu.Function(
-            input_names=['in_file', 'events_file', 'regressors_file', 'regressors_names'],
+            input_names=['inputs', 'events_file', 'regressors_file', 'regressors_names'],
             output_names=['info', 'realign_file'],
             function=_bids2nipypeinfo
         ), name='runinfo')
