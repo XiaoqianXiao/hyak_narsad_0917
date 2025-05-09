@@ -84,7 +84,7 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
 
 module load apptainer
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {container_path} \\
-    python3 /app/run_1st_level.py --subject {sub} --task {task}
+    python3 /app/run_1st_level_single_trial.py --subject {sub} --task {task}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
     with open(script_path, 'w') as f:
