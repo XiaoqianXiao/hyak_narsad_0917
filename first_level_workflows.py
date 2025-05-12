@@ -318,7 +318,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
         (apply_mask, feat_spec, [('out_file', 'in_file')]),
 
-        (feat_spec, feat_fit, [('design_file', 'design_file'), ('tcon_file', 'tcon_file')]),
+        (feat_spec, feat_fit, [('design_file', 'design_file'), ('con_file', 'tcon_file')]),
         (apply_mask, feat_fit, [('out_file', 'in_file')]),
 
         (feat_fit, feat_select, [('results_dir', 'base_directory')]),
