@@ -205,12 +205,8 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     wf.config['execution']['remove_unnecessary_outputs'] = False
 
     # 1) Datasource: unpack per-subject inputs
-    datasource = pe.Node(
-        Function(
-            input_names=['in_dict'],
-            output_names=['bold', 'mask', 'events', 'regressors', 'tr'],
-            function=_dict_ds
-        ), name='datasource')
+    datasource = pe.Node(niu.Function(function=_dict_ds, output_names=DATA_ITEMS),
+                         name='datasource')
     datasource.inputs.in_dict = inputs
     datasource.iterables = ('sub', sorted(inputs.keys()))
 
