@@ -193,6 +193,7 @@ def get_trial_idxs(events_file):
     """
     Return sorted unique trial indices from an events TSV file.
     """
+    import pandas as pd
     df = pd.read_csv(events_file, sep='\t')
     if 'trial_idx' not in df.columns:
         df['trial_idx'] = range(1, len(df) + 1)
