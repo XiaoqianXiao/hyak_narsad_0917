@@ -217,7 +217,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     # 3) Extract confounds (motion etc.)
     runinfo = pe.Node(
         niu.Function(
-            input_names=['inputs', 'events_file', 'regressors_file', 'regressors_names'],
+            input_names=['in_file', 'events_file', 'regressors_file', 'regressors_names'],
             output_names=['info', 'realign_file'],
             function=_bids2nipypeinfo
         ), name='runinfo')
