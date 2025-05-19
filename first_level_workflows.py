@@ -172,10 +172,12 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     return workflow
 
 
-def make_trial_info_lss(events_df, target_idx):
+def make_trial_info_lss(events_file, target_idx):
     """
     Create session_info for LSS: one EV for the target trial, one for all others.
     """
+    import pandas as pd
+    events_df = pd.read_csv(events_file, sep='\t')
     row = events_df[events_df['trial_idx'] == target_idx]
     if row.empty:
         raise ValueError(f"Trial {target_idx} not found in events file.")
