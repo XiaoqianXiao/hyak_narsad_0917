@@ -177,18 +177,30 @@ def make_trial_info_lss(events_file, target_idx):
     Create session_info for LSS: one EV for the target trial, one for all others.
     """
     import pandas as pd
-    events_df = pd.read_csv(events_file, sep='\t')
-    row = events_df[events_df['trial_idx'] == target_idx]
+    from nipype.interfaces.base import Bunch
+
+    # Load events and ensure trial_idx exists
+    df = pd.read_csv(events_file, sep='\t')
+    if 'trial_idx' not in df.columns:
+        df['trial_idx'] = range(1, len(df) + 1)
+
+    # Grab the target trial
+    row = df[df['trial_idx'] == target_idx]
     if row.empty:
         raise ValueError(f"Trial {target_idx} not found in events file.")
+
     onset, duration = row[['onset', 'duration']].iloc[0].astype(float)
-    others = events_df[events_df['trial_idx'] != target_idx]
+
+    # All other trials
+    others = df[df['trial_idx'] != target_idx]
+
     return Bunch(
         conditions=[f"t{target_idx}", "others"],
         onsets=[[onset], others['onset'].tolist()],
         durations=[[duration], others['duration'].tolist()],
         amplitudes=None
     )
+
 
 
 def get_trial_idxs(events_file):
@@ -240,11 +252,11 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     # 5) Build per-trial session_info for LSS directly
     lss_info = pe.MapNode(
         Function(
-            input_names=['events_file', 'trial_idx'],
+            input_names=['events_file', 'target_idx'],
             output_names=['trial_info'],
             function=make_trial_info_lss
         ), name='lss_info',
-        iterfield=['trial_idx']
+        iterfield=['target_idx']
     )
 
     # 6) SpecifyModel: create fsf and EV files per trial
@@ -303,7 +315,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
 
         (datasource, trial_node, [('events', 'events_file')]),
-        (trial_node, lss_info, [('trial_idx_list', 'trial_idx')]),
+        (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
         (datasource, lss_info, [('events', 'events_file')]),
 
         (lss_info, l1_spec, [('trial_info', 'trial_info')]),
