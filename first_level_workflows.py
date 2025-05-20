@@ -266,7 +266,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             input_units='secs',
             high_pass_filter_cutoff=100
         ), name='l1_spec',
-        iterfield=['session_info', 'realignment_parameters']
+        iterfield=['session_info']
     )
 
     # 7) Level1Design: generate design matrices
