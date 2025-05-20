@@ -255,7 +255,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             input_names=['events_file', 'target_idx'],
             output_names=['trial_info'],
             function=make_trial_info_lss
-        ), name='lss_info',
+        ), name='session_info',
         iterfield=['target_idx']
     )
 
@@ -318,7 +318,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
         (datasource, lss_info, [('events', 'events_file')]),
 
-        (lss_info, l1_spec, [('trial_info', 'session_info')]),
+        (lss_info, l1_spec, [('session_info', 'session_info')]),
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
 
