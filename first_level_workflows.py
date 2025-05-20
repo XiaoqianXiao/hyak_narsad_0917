@@ -253,9 +253,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     lss_info = pe.MapNode(
         niu.Function(
             input_names=['events_file', 'target_idx'],
-            output_names=['trial_info'],
+            output_names=['session_info'],
             function=make_trial_info_lss
-        ), name='session_info',
+        ), name='lss_info',
         iterfield=['target_idx']
     )
 
