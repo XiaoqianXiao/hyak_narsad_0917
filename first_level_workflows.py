@@ -243,7 +243,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
     # 4) Enumerate trial indices
     trial_node = pe.Node(
-        Function(
+        niu.Function(
             input_names=['events_file'],
             output_names=['trial_idx_list'],
             function=get_trial_idxs
@@ -251,7 +251,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
     # 5) Build per-trial session_info for LSS directly
     lss_info = pe.MapNode(
-        Function(
+        niu.Function(
             input_names=['events_file', 'target_idx'],
             output_names=['trial_info'],
             function=make_trial_info_lss
