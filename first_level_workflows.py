@@ -312,27 +312,26 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     # -- Connect nodes ---------------------------------------------------------
     wf.connect([
         (datasource, apply_mask, [('bold', 'in_file'), ('mask', 'mask_file')]),
-        (apply_mask, runinfo, [('out_file', 'in_file')]),
         (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
-
         (datasource, trial_node, [('events', 'events_file')]),
-        (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
         (datasource, lss_info, [('events', 'events_file')]),
+        (datasource, l1_spec, [('tr', 'time_repetition')]),
+        (datasource, l1_model, [('tr', 'interscan_interval')]),
+
+        (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
+
+        (apply_mask, runinfo, [('out_file', 'in_file')]),
+        (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
+        (apply_mask, feat_spec, [('out_file', 'in_file')]),
+
+        (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
 
         (lss_info, l1_spec, [('trial_info', 'subject_info')]),
         (lss_info, l1_model, [('trial_info', 'session_info')]),
 
-        (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
-        (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
-
-        (datasource, l1_model, [('tr', 'interscan_interval')]),
-
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
-        (apply_mask, feat_spec, [('out_file', 'in_file')]),
 
         (feat_spec, feat_fit, [('design_file', 'design_file'), ('con_file', 'tcon_file')]),
-        (apply_mask, feat_fit, [('out_file', 'in_file')]),
-
         (feat_fit, feat_select, [('results_dir', 'base_directory')]),
         *[(feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')]) for i in range(1, 2)],
         *[(feat_select, ds_varcopes[i - 1], [(f'varcope{i}', 'in_file')]) for i in range(1, 2)],

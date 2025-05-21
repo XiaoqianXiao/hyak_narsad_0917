@@ -72,6 +72,48 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     return [runinfo], str(out_motion)
 
-def show_inputs(interface):
-    for name, trait in interface.inputs.traits().items():
-        print(f"{name:<30} {trait.trait_type.__class__.__name__:<15} default={trait.default_value()}")
+
+def print_input_traits(interface_class):
+    """
+    Print all input traits of a Nipype interface class, with mandatory inputs listed first,
+    and then extract any mutually‐exclusive input groups from the interface’s help().
+
+    Parameters:
+    - interface_class: A Nipype interface class (e.g., SpecifyModel)
+    """
+    import io, sys
+
+    # 1) List all traits
+    spec = interface_class().inputs
+    traits = spec.traits().items()
+    sorted_traits = sorted(traits, key=lambda item: not item[1].mandatory)
+
+    print("Name                           | mandatory")
+    print("-------------------------------|----------")
+    for name, trait in sorted_traits:
+        print(f"{name:30} | {trait.mandatory}")
+
+    # 2) Capture help() output to find the "Mutually exclusive inputs" line
+    buf = io.StringIO()
+    old_stdout = sys.stdout
+    sys.stdout = buf
+    try:
+        interface_class().help()
+    finally:
+        sys.stdout = old_stdout
+
+    help_text = buf.getvalue().splitlines()
+    mux_line = next((line for line in help_text if 'mutually_exclusive' in line), None)
+
+    # 3) Parse and print mutually‐exclusive inputs if present
+    if mux_line:
+        # e.g. "Mutually exclusive inputs: subject_info, event_files, bids_event_file"
+        _, fields = mux_line.split(':', 1)
+        names = [n.strip() for n in fields.split(',')]
+        print("\nMutually exclusive inputs:")
+        for n in names:
+            print(f"  - {n}")
+    else:
+        print("\nNo mutually exclusive inputs found in help().")
+
+
