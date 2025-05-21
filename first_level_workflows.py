@@ -337,7 +337,6 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (make_session_info,   l1_model, [('session_info','session_info')]),
         (datasource, l1_model, [('tr', 'interscan_interval')]),
-        (apply_mask, l1_model, [('out_file', 'in_file')]),
 
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
         (apply_mask, feat_spec, [('out_file', 'in_file')]),
