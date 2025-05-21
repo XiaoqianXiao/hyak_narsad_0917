@@ -322,7 +322,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
 
-        (l1_spec, l1_model, [('session_info', 'session_info')]),
+        (lss_info,   l1_model, [('session_info','session_info')]),
         (datasource, l1_model, [('tr', 'interscan_interval')]),
         (apply_mask, l1_model, [('out_file', 'in_file')]),
 
