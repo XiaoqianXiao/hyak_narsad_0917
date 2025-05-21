@@ -250,12 +250,13 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         ), name='get_trial_idxs')
 
     # 5) Build per-trial session_info for LSS directly
-    lss_info = pe.MapNode(
+    make_session_info = pe.MapNode(
         niu.Function(
             input_names=['events_file', 'target_idx'],
-            output_names=['session_info'],
+            output_names=['session_info'],  # ← must be exactly 'session_info'
             function=make_trial_info_lss
-        ), name='lss_info',
+        ),
+        name='make_session_info',  # ← pick a clear node name
         iterfield=['target_idx']
     )
 
@@ -315,14 +316,14 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
 
         (datasource, trial_node, [('events', 'events_file')]),
-        (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
-        (datasource, lss_info, [('events', 'events_file')]),
+        (trial_node, make_session_info, [('trial_idx_list', 'target_idx')]),
+        (datasource, make_session_info, [('events', 'events_file')]),
 
-        (lss_info, l1_spec, [('session_info', 'session_info')]),
+        (make_session_info, l1_spec, [('session_info', 'session_info')]),
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
 
-        (lss_info,   l1_model, [('session_info','session_info')]),
+        (make_session_info,   l1_model, [('session_info','session_info')]),
         (datasource, l1_model, [('tr', 'interscan_interval')]),
         (apply_mask, l1_model, [('out_file', 'in_file')]),
 
