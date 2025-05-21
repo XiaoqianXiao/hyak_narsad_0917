@@ -250,24 +250,14 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         ), name='get_trial_idxs')
 
     # 5) Build per-trial session_info for LSS directly
-    make_session_info = pe.MapNode(
+    lss_info = pe.MapNode(
         niu.Function(
             input_names=['events_file', 'target_idx'],
-            output_names=['session_info'],  # ← must be exactly 'session_info'
+            output_names=['trial_info'],
             function=make_trial_info_lss
         ),
-        name='make_session_info',  # ← pick a clear node name
+        name='lss_info',
         iterfield=['target_idx']
-    )
-
-    spec_info = pe.MapNode(
-        niu.Function(
-            input_names=['session_info'],
-            output_names=['subject_info'],
-            function=lambda sess: sess
-        ),
-        name='spec_info',
-        iterfield=['session_info']
     )
 
     # 6) SpecifyModel: create fsf and EV files per trial
@@ -277,7 +267,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             input_units='secs',
             high_pass_filter_cutoff=100
         ), name='l1_spec',
-        iterfield=['subject_info']
+        iterfield=['session_info']
     )
 
     # 7) Level1Design: generate design matrices
@@ -326,16 +316,15 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
 
         (datasource, trial_node, [('events', 'events_file')]),
-        (trial_node, make_session_info, [('trial_idx_list', 'target_idx')]),
-        (datasource, make_session_info, [('events', 'events_file')]),
+        (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
+        (datasource, lss_info, [('events', 'events_file')]),
 
-        (make_session_info, spec_info, [('session_info', 'session_info')]),
+        (lss_info, l1_spec, [('trial_info', 'session_info')]),
+        (lss_info, l1_model, [('trial_info', 'session_info')]),
 
-        (spec_info, l1_spec, [('subject_info', 'subject_info')]),
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
 
-        (make_session_info,   l1_model, [('session_info','session_info')]),
         (datasource, l1_model, [('tr', 'interscan_interval')]),
 
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
