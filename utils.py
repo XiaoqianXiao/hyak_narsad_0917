@@ -71,3 +71,7 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
         runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
 
     return [runinfo], str(out_motion)
+
+def show_inputs(interface):
+    for name, trait in interface.inputs.traits().items():
+        print(f"{name:<30} {trait.trait_type.__class__.__name__:<15} default={trait.default_value()}")

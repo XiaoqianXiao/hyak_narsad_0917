@@ -267,7 +267,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             input_units='secs',
             high_pass_filter_cutoff=100
         ), name='l1_spec',
-        iterfield=['session_info']
+        iterfield=['subject_info']
     )
 
     # 7) Level1Design: generate design matrices
@@ -319,7 +319,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
         (datasource, lss_info, [('events', 'events_file')]),
 
-        (lss_info, l1_spec, [('trial_info', 'session_info')]),
+        (lss_info, l1_spec, [('trial_info', 'subject_info')]),
         (lss_info, l1_model, [('trial_info', 'session_info')]),
 
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
