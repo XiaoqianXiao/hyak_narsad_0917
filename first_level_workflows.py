@@ -262,6 +262,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['target_idx']
     )
 
+    # 5.5) Merge the list of lists into a single list of Bunch objects
+    merge_info = pe.Node(niu.Merge(1, ravel_inputs=True), name='merge_info')
+
     # 6) SpecifyModel: create fsf and EV files per trial
     l1_spec = pe.MapNode(
         SpecifyModel(
@@ -328,8 +331,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
 
-        (lss_info, l1_spec, [('subject_info', 'subject_info')]),
-        (lss_info, l1_model, [('subject_info', 'session_info')]),
+        (lss_info, merge_info, [('subject_info', 'in1')]),
+        (merge_info, l1_spec, [('out', 'subject_info')]),
+        (merge_info, l1_model, [('out', 'session_info')]),
 
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
 
