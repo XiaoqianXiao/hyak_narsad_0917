@@ -260,6 +260,16 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['target_idx']
     )
 
+    spec_info = pe.MapNode(
+        niu.Function(
+            input_names=['session_info'],
+            output_names=['subject_info'],
+            function=lambda sess: sess
+        ),
+        name='spec_info',
+        iterfield=['session_info']
+    )
+
     # 6) SpecifyModel: create fsf and EV files per trial
     l1_spec = pe.MapNode(
         SpecifyModel(
@@ -267,7 +277,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             input_units='secs',
             high_pass_filter_cutoff=100
         ), name='l1_spec',
-        iterfield=['session_info']
+        iterfield=['subject_info']
     )
 
     # 7) Level1Design: generate design matrices
@@ -319,7 +329,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (trial_node, make_session_info, [('trial_idx_list', 'target_idx')]),
         (datasource, make_session_info, [('events', 'events_file')]),
 
-        (make_session_info, l1_spec, [('session_info', 'session_info')]),
+        (make_session_info, spec_info, [('session_info', 'session_info')]),
+
+        (spec_info, l1_spec, [('subject_info', 'subject_info')]),
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
 
