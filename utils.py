@@ -117,3 +117,24 @@ def print_input_traits(interface_class):
         print("\nNo mutually exclusive inputs found in help().")
 
 
+def print_output_traits(interface_class):
+    """
+    Print all input traits of a Nipype interface class, with mandatory inputs listed first,
+    and then extract any mutually‐exclusive input groups from the interface’s help().
+
+    Parameters:
+    - interface_class: A Nipype interface class (e.g., SpecifyModel)
+    """
+    import io, sys
+
+    # 1) List all traits
+    spec = interface_class().output_spec()  # same as inst.output_spec(), but bound
+    traits = spec.traits().items()
+    sorted_traits = sorted(traits, key=lambda item: not item[1].mandatory)
+
+    print("Name                           | mandatory")
+    print("-------------------------------|----------")
+    for name, trait in sorted_traits:
+        print(f"{name:30} | {trait.mandatory}")
+
+

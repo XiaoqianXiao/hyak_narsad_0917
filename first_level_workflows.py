@@ -194,12 +194,14 @@ def make_trial_info_lss(events_file, target_idx):
     # All other trials
     others = df[df['trial_idx'] != target_idx]
 
-    return Bunch(
+    ev = Bunch(
         conditions=[f"t{target_idx}", "others"],
         onsets=[[onset], others['onset'].tolist()],
         durations=[[duration], others['duration'].tolist()],
         amplitudes=None
     )
+    # <-- wrap in a list
+    return [ev]
 
 
 
@@ -253,7 +255,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     lss_info = pe.MapNode(
         niu.Function(
             input_names=['events_file', 'target_idx'],
-            output_names=['trial_info'],
+            output_names=['subject_info'],
             function=make_trial_info_lss
         ),
         name='lss_info',
@@ -326,8 +328,8 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
 
-        (lss_info, l1_spec, [('trial_info', 'subject_info')]),
-        (lss_info, l1_model, [('trial_info', 'session_info')]),
+        (lss_info, l1_spec, [('subject_info', 'subject_info')]),
+        (lss_info, l1_model, [('subject_info', 'session_info')]),
 
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
 
