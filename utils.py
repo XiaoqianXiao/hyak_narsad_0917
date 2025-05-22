@@ -140,6 +140,7 @@ def print_output_traits(interface_class):
 #%%
 ## create ev files which replace original during 0 into 0.1
 import os
+import pandas as pd
 behav_dir = '/Users/xiaoqianxiao/projects/NARSAD/MRI/source_data/behav'
 file_dic = {'task-Narsad_phase2_half_events.csv': 'single_trial_task-Narsad_phase-2_sub-202_half_events.csv',
             'task-Narsad_phase3_half_events.csv': 'single_trial_task-Narsad_phase-3_sub-202_half_events.csv',
