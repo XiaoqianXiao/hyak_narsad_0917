@@ -125,9 +125,9 @@ if __name__ == "__main__":
 
                 # Set events file
                 if sub == 'N202' and task == 'phase3':
-                    events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
+                    events_file = os.path.join(behav_dir, 'single_trial_task-NARSAD_phase-3_sub-202_half_events.csv')
                 else:
-                    events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+                    events_file = os.path.join(behav_dir, f'single_trial_task-Narsad_{task}_half_events.csv')
 
                 inputs = {sub: {}}
                 base = {'subject', 'task'}.intersection(entities)

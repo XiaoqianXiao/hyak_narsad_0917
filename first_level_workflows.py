@@ -5,11 +5,7 @@ from nipype.interfaces import fsl, utility as niu, io as nio
 from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
 from utils import _dict_ds
 from utils import _bids2nipypeinfo
-from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design
-import os
-import pandas as pd
-from nipype.interfaces.utility import IdentityInterface, Function
-from nipype.interfaces.base import Bunch
+from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design, FEATModel
 
 
 class DerivativesDataSink(BIDSDerivatives):
@@ -54,7 +50,7 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     ), name='l1_spec')
 
     # l1_model creates a first-level model design
-    l1_model = pe.Node(fsl.Level1Design(
+    l1_model = pe.Node(Level1Design(
         bases={'dgamma': {'derivs': True}},
         model_serial_correlations=True,
         contrasts=[('CS+_safe>CS-', 'T', ['CSS_first_half', 'CSS_second_half', 'CS-_first_half', 'CS-_second_half'],
@@ -106,9 +102,9 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     ), name='l1_model')
 
     # feat_spec generates an fsf model specification file
-    feat_spec = pe.Node(fsl.FEATModel(), name='feat_spec')
+    feat_spec = pe.Node(FEATModel(), name='feat_spec')
     # feat_fit actually runs FEAT
-    feat_fit = pe.Node(fsl.FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit', mem_gb=12)
+    feat_fit = pe.Node(FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit', mem_gb=12)
     feat_select = pe.Node(nio.SelectFiles({
         **{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 32)},
         **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 32)}
@@ -261,8 +257,15 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['target_idx']
     )
 
-    # 5.5) Merge subject_info to flatten list
-    merge_info = pe.Node(niu.Merge(1, ravel_inputs=True), name='merge_info')
+    # 5.5) Flatten the list of subject_info Bunch objects
+    flatten_session_info = pe.Node(
+        niu.Function(
+            input_names=['in_list_of_lists'],
+            output_names=['out_list'],
+            function=lambda in_list_of_lists: [item for sublist in in_list_of_lists for item in sublist]
+        ),
+        name='flatten_session_info'
+    )
 
     # 6) SpecifyModel
     l1_spec = pe.MapNode(
@@ -287,7 +290,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
     # 8) Level1Design
     l1_model = pe.MapNode(
-        fsl.Level1Design(
+        Level1Design(
             bases={hrf_model: {'derivs': True}},
             model_serial_correlations=True
         ), name='l1_model',
@@ -296,7 +299,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
     # 9) FEATModel
     feat_spec = pe.MapNode(
-        fsl.FEATModel(), name='feat_spec',
+        FEATModel(), name='feat_spec',
         iterfield=['fsf_file', 'ev_files']
     )
 
@@ -307,21 +310,25 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     )
 
     # 11) Select and sink copes/varcopes
-    feat_select = pe.Node(
-        nio.SelectFiles({**{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 2)},
-                         **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 2)}}),
-        name='feat_select'
+    feat_select = pe.MapNode(
+        nio.SelectFiles({'cope': 'cope1.nii.gz', 'varcope': 'varcope1.nii.gz'}),  # Only cope1 and varcope1 per trial
+        name='feat_select',
+        iterfield=['base_directory']  # Iterate over results_dir from feat_fit
     )
-    ds_copes = [
-        pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'cope{i}'),
-                name=f'ds_cope{i}', run_without_submitting=True)
-        for i in range(1, 2)
-    ]
-    ds_varcopes = [
-        pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'varcope{i}'),
-                name=f'ds_varcope{i}', run_without_submitting=True)
-        for i in range(1, 2)
-    ]
+
+    def _get_output_desc(trial_idx):
+        return f'trial{trial_idx:03d}cope'
+
+    ds_copes = pe.MapNode(
+        DerivativesDataSink(base_directory=output_dir, keep_dtype=False),
+        name=f'ds_copes',
+        iterfield=['in_file', 'desc']  # Iterate over in_file and dynamically set desc
+    )
+    ds_varcopes = pe.MapNode(
+        DerivativesDataSink(base_directory=output_dir, keep_dtype=False),
+        name=f'ds_varcopes',
+        iterfield=['in_file', 'desc']
+    )
 
     # Connect nodes
     wf.connect([
@@ -341,9 +348,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
 
-        (lss_info, merge_info, [('subject_info', 'in1')]),
-        (merge_info, l1_spec, [('out', 'subject_info')]),
-        (merge_info, l1_model, [('out', 'session_info')]),
+        (lss_info, flatten_session_info, [('subject_info', 'in_list_of_lists')]),
+        (flatten_session_info, l1_spec, [('out_list', 'subject_info')]),
+        (flatten_session_info, l1_model, [('out_list', 'session_info')]),
 
         (contrast_node, l1_model, [('contrasts', 'contrasts')]),
 
