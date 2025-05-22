@@ -266,7 +266,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
     # 6) SpecifyModel
     l1_spec = pe.MapNode(
-        fsl.SpecifyModel(
+        SpecifyModel(
             parameter_source='FSL',
             input_units='secs',
             high_pass_filter_cutoff=100
