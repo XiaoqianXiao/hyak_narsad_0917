@@ -216,17 +216,9 @@ def get_trial_idxs(events_file):
 
 
 def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
-    import nipype.pipeline.engine as pe
-    import nipype.interfaces.utility as niu
-    import nipype.interfaces.fsl as fsl
-    from nipype.interfaces.io import DerivativesDataSink
-    from nipype.interfaces.fsl import ApplyMask, FILMGLS
-    import nipype.interfaces.io as nio
-
-    wf = pe.Workflow(name='wf_single_trial_LSS')
+    wf = pe.Workflow('wf_single_trial_LSS')
     wf.config['execution']['use_relative_paths'] = True
     wf.config['execution']['remove_unnecessary_outputs'] = False
-    wf.config['execution']['crashdump_dir'] = '/gscratch/scrubbed/fanglab/xiaoqian/tmp_crash_files/'
 
     # 1) Datasource
     datasource = pe.Node(niu.Function(function=_dict_ds, output_names=DATA_ITEMS),
