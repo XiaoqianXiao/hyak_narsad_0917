@@ -200,8 +200,7 @@ def make_trial_info_lss(events_file, target_idx):
         durations=[[duration], others['duration'].tolist()],
         amplitudes=None
     )
-    # <-- wrap in a list
-    return [ev]
+    return ev
 
 
 
@@ -217,11 +216,19 @@ def get_trial_idxs(events_file):
 
 
 def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
-    wf = pe.Workflow('wf_single_trial_LSS')
+    import nipype.pipeline.engine as pe
+    import nipype.interfaces.utility as niu
+    import nipype.interfaces.fsl as fsl
+    from nipype.interfaces.io import DerivativesDataSink
+    from nipype.interfaces.fsl import ApplyMask, FILMGLS
+    import nipype.interfaces.io as nio
+
+    wf = pe.Workflow(name='wf_single_trial_LSS')
     wf.config['execution']['use_relative_paths'] = True
     wf.config['execution']['remove_unnecessary_outputs'] = False
+    wf.config['execution']['crashdump_dir'] = '/gscratch/scrubbed/fanglab/xiaoqian/tmp_crash_files/'
 
-    # 1) Datasource: unpack per-subject inputs
+    # 1) Datasource
     datasource = pe.Node(niu.Function(function=_dict_ds, output_names=DATA_ITEMS),
                          name='datasource')
     datasource.inputs.in_dict = inputs
@@ -230,7 +237,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     # 2) Apply brain mask
     apply_mask = pe.Node(ApplyMask(), name='apply_mask')
 
-    # 3) Extract confounds (motion etc.)
+    # 3) Extract confounds
     runinfo = pe.Node(
         niu.Function(
             input_names=['in_file', 'events_file', 'regressors_file', 'regressors_names'],
@@ -251,7 +258,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
             function=get_trial_idxs
         ), name='get_trial_idxs')
 
-    # 5) Build per-trial session_info for LSS directly
+    # 5) Build per-trial session_info for LSS
     lss_info = pe.MapNode(
         niu.Function(
             input_names=['events_file', 'target_idx'],
@@ -262,12 +269,12 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['target_idx']
     )
 
-    # 5.5) Merge the list of lists into a single list of Bunch objects
+    # 5.5) Merge subject_info to flatten list
     merge_info = pe.Node(niu.Merge(1, ravel_inputs=True), name='merge_info')
 
-    # 6) SpecifyModel: create fsf and EV files per trial
+    # 6) SpecifyModel
     l1_spec = pe.MapNode(
-        SpecifyModel(
+        fsl.SpecifyModel(
             parameter_source='FSL',
             input_units='secs',
             high_pass_filter_cutoff=100
@@ -275,46 +282,56 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['subject_info']
     )
 
-    # 7) Level1Design: generate design matrices
+    # 7) Function to create trial-specific contrasts
+    def create_contrasts(trial_idx_list):
+        return [(f't{i}', 'T', [f't{i}'], [1.0]) for i in trial_idx_list]
+
+    contrast_node = pe.Node(
+        niu.Function(
+            input_names=['trial_idx_list'],
+            output_names=['contrasts'],
+            function=create_contrasts
+        ), name='contrast_node')
+
+    # 8) Level1Design
     l1_model = pe.MapNode(
         fsl.Level1Design(
             bases={hrf_model: {'derivs': True}},
-            model_serial_correlations=True,
-            contrasts=[('t', 'T', ['t'], [1.0])]
+            model_serial_correlations=True
         ), name='l1_model',
-        iterfield=['session_info']
+        iterfield=['session_info', 'contrasts']
     )
 
-    # 8) FEATModel: produce design.mat and design.con
+    # 9) FEATModel
     feat_spec = pe.MapNode(
         fsl.FEATModel(), name='feat_spec',
         iterfield=['fsf_file', 'ev_files']
     )
 
-    # 9) run FEAT
+    # 10) Run FEAT
     feat_fit = pe.MapNode(
         FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit',
         iterfield=['design_file', 'tcon_file', 'in_file']
     )
 
-    # 10) Select and sink copes/varcopes
+    # 11) Select and sink copes/varcopes
     feat_select = pe.Node(
         nio.SelectFiles({**{f'cope{i}': f'cope{i}.nii.gz' for i in range(1, 2)},
-                     **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 2)}}),
+                         **{f'varcope{i}': f'varcope{i}.nii.gz' for i in range(1, 2)}}),
         name='feat_select'
     )
     ds_copes = [
         pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'cope{i}'),
-             name=f'ds_cope{i}', run_without_submitting=True)
+                name=f'ds_cope{i}', run_without_submitting=True)
         for i in range(1, 2)
     ]
     ds_varcopes = [
         pe.Node(DerivativesDataSink(base_directory=output_dir, keep_dtype=False, desc=f'varcope{i}'),
-             name=f'ds_varcope{i}', run_without_submitting=True)
+                name=f'ds_varcope{i}', run_without_submitting=True)
         for i in range(1, 2)
     ]
 
-    # -- Connect nodes ---------------------------------------------------------
+    # Connect nodes
     wf.connect([
         (datasource, apply_mask, [('bold', 'in_file'), ('mask', 'mask_file')]),
         (datasource, runinfo, [('events', 'events_file'), ('regressors', 'regressors_file')]),
@@ -324,6 +341,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (datasource, l1_model, [('tr', 'interscan_interval')]),
 
         (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
+        (trial_node, contrast_node, [('trial_idx_list', 'trial_idx_list')]),
 
         (apply_mask, runinfo, [('out_file', 'in_file')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
@@ -334,6 +352,8 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (lss_info, merge_info, [('subject_info', 'in1')]),
         (merge_info, l1_spec, [('out', 'subject_info')]),
         (merge_info, l1_model, [('out', 'session_info')]),
+
+        (contrast_node, l1_model, [('contrasts', 'contrasts')]),
 
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
 
