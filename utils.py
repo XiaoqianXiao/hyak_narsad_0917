@@ -137,7 +137,6 @@ def print_output_traits(interface_class):
     for name, trait in sorted_traits:
         print(f"{name:30} | {trait.mandatory}")
 
-#%%
 ## create ev files which replace original during 0 into 0.1
 # import os
 # import pandas as pd
