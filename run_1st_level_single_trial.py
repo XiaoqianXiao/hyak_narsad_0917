@@ -159,9 +159,9 @@ if __name__ == "__main__":
             os.makedirs(work_dir, exist_ok=True)
 
             if sub == 'N202' and task == 'phase3':
-                events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
+                events_file = os.path.join(behav_dir, 'single_task-NARSAD_phase-3_sub-202_half_events.csv')
             else:
-                events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+                events_file = os.path.join(behav_dir, f'single_task-Narsad_{task}_half_events.csv')
 
             inputs = {sub: {}}
             base = {'subject', 'task'}.intersection(entities)
