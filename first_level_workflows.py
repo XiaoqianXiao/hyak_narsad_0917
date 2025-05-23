@@ -310,6 +310,12 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     # Select copes
     feat_select = pe.MapNode(niu.Select(index=[0]), iterfield=['inlist'], name='feat_select')
 
+    get_num_trials = pe.Node(niu.Function(
+        input_names=['trial_idx'],
+        output_names=['num_trials'],
+        function=lambda trial_idx: len(trial_idx)
+    ), name='get_num_trials')
+
     # Replicate source file for ds_copes and ds_varcopes
     replicate_source = pe.Node(niu.Function(
         input_names=['source_file', 'num_trials'],
@@ -336,6 +342,7 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (trial_node, lss_info, [('trial_idx_list', 'target_idx')]),
         (trial_node, contrast_node, [('trial_idx_list', 'trial_idx_list')]),
+        (trial_node, get_num_trials, [('trial_idx', 'trial_idx')]),
 
         (apply_mask, runinfo, [('out_file', 'in_file')]),
         (apply_mask, l1_spec, [('out_file', 'functional_runs')]),
@@ -355,7 +362,9 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (feat_fit, feat_select, [('copes', 'inlist')]),
         # Replicate source file
         (apply_mask, replicate_source, [('out_file', 'source_file')]),
-        (trial_node, replicate_source, [(('trial_idx', len), 'num_trials')]),
+        (get_num_trials, replicate_source, [('num_trials', 'num_trials')]),
+
+        # Save outputs
         (feat_select, ds_copes, [('out', 'in_file')]),
         (replicate_source, ds_copes, [('source_files', 'source_file')]),
         (feat_fit, ds_varcopes, [('varcopes', 'in_file')]),
