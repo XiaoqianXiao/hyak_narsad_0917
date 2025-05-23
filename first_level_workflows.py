@@ -304,32 +304,27 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
     )
 
     # 10) Run FEAT
-    feat_fit = pe.MapNode(
-        FILMGLS(smooth_autocorr=True, mask_size=5), name='feat_fit',
-        iterfield=['design_file', 'tcon_file', 'in_file']
-    )
+    feat_fit = pe.MapNode(fsl.FILMGLS(smooth_autocorr=True, mask_size=5), mem_gb=12,
+                          iterfield=['design_file', 'in_file', 'tcon_file'], name='feat_fit')
 
-    # 11) Select and sink copes/varcopes
-    feat_select = pe.MapNode(
-        nio.SelectFiles({'cope': 'cope1.nii.gz', 'varcope': 'varcope1.nii.gz'}),  # Only cope1 and varcope1 per trial
-        name='feat_select',
-        iterfield=['base_directory']  # Iterate over results_dir from feat_fit
-    )
+    # Select copes
+    feat_select = pe.MapNode(niu.Select(index=[0]), iterfield=['inlist'], name='feat_select')
 
-    def _get_output_desc(trial_idx):
-        return f'trial{trial_idx:03d}cope'
+    # Replicate source file for ds_copes and ds_varcopes
+    replicate_source = pe.Node(niu.Function(
+        input_names=['source_file', 'num_trials'],
+        output_names=['source_files'],
+        function=lambda source_file, num_trials: [source_file] * num_trials
+    ), name='replicate_source')
 
-    ds_copes = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir, keep_dtype=False),
-        name=f'ds_copes',
-        iterfield=['in_file', 'desc']  # Iterate over in_file and dynamically set desc
-    )
-    ds_varcopes = pe.MapNode(
-        DerivativesDataSink(base_directory=output_dir, keep_dtype=False),
-        name=f'ds_varcopes',
-        iterfield=['in_file', 'desc']
-    )
+    # Save outputs
+    ds_copes = pe.MapNode(DerivativesDataSink(
+        base_directory=output_dir, out_path_base='firstLevel', suffix='cope'
+    ), iterfield=['source_file', 'in_file'], name='ds_copes')
 
+    ds_varcopes = pe.MapNode(DerivativesDataSink(
+        base_directory=output_dir, out_path_base='firstLevel', suffix='varcope'
+    ), iterfield=['source_file', 'in_file'], name='ds_varcopes')
     # Connect nodes
     wf.connect([
         (datasource, apply_mask, [('bold', 'in_file'), ('mask', 'mask_file')]),
@@ -357,9 +352,14 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         (l1_model, feat_spec, [('fsf_files', 'fsf_file'), ('ev_files', 'ev_files')]),
 
         (feat_spec, feat_fit, [('design_file', 'design_file'), ('con_file', 'tcon_file')]),
-        (feat_fit, feat_select, [('results_dir', 'base_directory')]),
-        *[(feat_select, ds_copes[i - 1], [(f'cope{i}', 'in_file')]) for i in range(1, 2)],
-        *[(feat_select, ds_varcopes[i - 1], [(f'varcope{i}', 'in_file')]) for i in range(1, 2)],
+        (feat_fit, feat_select, [('copes', 'inlist')]),
+        # Replicate source file
+        (apply_mask, replicate_source, [('out_file', 'source_file')]),
+        (trial_node, replicate_source, [(('trial_idx', len), 'num_trials')]),
+        (feat_select, ds_copes, [('out', 'in_file')]),
+        (replicate_source, ds_copes, [('source_files', 'source_file')]),
+        (feat_fit, ds_varcopes, [('varcopes', 'in_file')]),
+        (replicate_source, ds_varcopes, [('source_files', 'source_file')]),
     ])
 
     return wf
