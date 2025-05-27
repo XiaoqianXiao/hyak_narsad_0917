@@ -167,7 +167,14 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
     ])
     return workflow
 
-
+##Nipype v1.10.0.
+from nipype.pipeline import engine as pe
+from nipype.algorithms.modelgen import SpecifyModel
+from nipype.interfaces import fsl, utility as niu, io as nio
+from niworkflows.interfaces.bids import DerivativesDataSink as BIDSDerivatives
+from utils import _dict_ds
+from utils import _bids2nipypeinfo
+from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design, FEATModel
 def make_trial_info_lss(events_file, target_idx):
     """
     Create session_info for LSS: one EV for the target trial, one for all others.
@@ -257,15 +264,6 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
         iterfield=['target_idx']
     )
 
-    # 5.5) Flatten the list of subject_info Bunch objects
-    flatten_session_info = pe.Node(
-        niu.Function(
-            input_names=['in_list_of_lists'],
-            output_names=['out_list'],
-            function=lambda in_list_of_lists: [item for sublist in in_list_of_lists for item in sublist]
-        ),
-        name='flatten_session_info'
-    )
 
     # 6) SpecifyModel
     l1_spec = pe.MapNode(
@@ -350,9 +348,8 @@ def first_level_single_trial_LSS_wf(inputs, output_dir, hrf_model='dgamma'):
 
         (runinfo, l1_spec, [('realign_file', 'realignment_parameters')]),
 
-        (lss_info, flatten_session_info, [('subject_info', 'in_list_of_lists')]),
-        (flatten_session_info, l1_spec, [('out_list', 'subject_info')]),
-        (flatten_session_info, l1_model, [('out_list', 'session_info')]),
+        (lss_info, l1_spec, [('subject_info', 'subject_info')]),
+        (lss_info, l1_model, [('subject_info', 'session_info')]),
 
         (contrast_node, l1_model, [('contrasts', 'contrasts')]),
 
