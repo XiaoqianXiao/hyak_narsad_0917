@@ -16,6 +16,9 @@ def _neg(val):
 def _dict_ds(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr']):
     return tuple([in_dict[sub][k] for k in order])
 
+def _dict_ds_lss(in_dict, sub, order=['bold', 'mask', 'events', 'regressors', 'tr', 'trial_ID']):
+    return tuple([in_dict[sub][k] for k in order])
+
 def _bids2nipypeinfo(in_file, events_file, regressors_file,
                      regressors_names=None,
                      motion_columns=None,
@@ -27,6 +30,9 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     # Process the events file with tab separator (fix for BIDS TSV files)
     events = pd.read_csv(events_file, sep='\t')  # Changed from sep=',' to sep='\t'
+    print("=== DEBUG: loaded event columns ===")
+    print(events.columns.tolist())
+    print(events.head())
 
     bunch_fields = ['onsets', 'durations', 'amplitudes']
 
@@ -69,6 +75,73 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
                 set(regress_data.columns)))
             runinfo.regressors = regress_data[regressors_names]
         runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
+
+    return [runinfo], str(out_motion)
+
+
+def _bids2nipypeinfo_lss(in_file, events_file, regressors_file,
+                          trial_ID,
+                          regressors_names=None,
+                          motion_columns=None,
+                          decimals=3,
+                          amplitude=1.0):
+    from pathlib import Path
+    import numpy as np
+    import pandas as pd
+    from nipype.interfaces.base.support import Bunch
+
+    if not motion_columns:
+        from itertools import product
+        motion_columns = ['_'.join(v) for v in product(('trans', 'rot'), 'xyz')]
+
+    # Load events and regressors
+    events = pd.read_csv(events_file)
+    print("LOADED EVENTS COLUMNS:", events.columns.tolist())
+    print(events.head())
+    regress_data = pd.read_csv(regressors_file, sep='\t')
+
+    # Locate the trial of interest by ID
+    trial = events[events['trial_ID'] == trial_ID]
+    if trial.empty:
+        raise ValueError(f"Trial ID {trial_ID} not found in events file.")
+    if len(trial) > 1:
+        raise ValueError(f"Trial ID {trial_ID} is not unique in events file.")
+
+    other_trials = events[events['trial_ID'] != trial_ID]
+
+    out_motion = Path('motion.par').resolve()
+    np.savetxt(out_motion, regress_data[motion_columns].values, '%g')
+
+    if regressors_names is None:
+        regressors_names = sorted(set(regress_data.columns) - set(motion_columns))
+
+    # Build the subject_info Bunch
+    conditions = ['trial', 'others']
+    onsets = [
+        np.round(trial['onset'].values.tolist(), decimals),
+        np.round(other_trials['onset'].values.tolist(), decimals)
+    ]
+    durations = [
+        np.round(trial['duration'].values.tolist(), decimals),
+        np.round(other_trials['duration'].values.tolist(), decimals)
+    ]
+    amplitudes = [
+        [amplitude] * len(onsets[0]),
+        [amplitude] * len(onsets[1])
+    ]
+
+    runinfo = Bunch(
+        scans=in_file,
+        conditions=conditions,
+        onsets=onsets,
+        durations=durations,
+        amplitudes=amplitudes
+    )
+
+    if regressors_names:
+        runinfo.regressor_names = regressors_names
+        regress_subset = regress_data[regressors_names].fillna(0.0)
+        runinfo.regressors = regress_subset.values.T.tolist()
 
     return [runinfo], str(out_motion)
 

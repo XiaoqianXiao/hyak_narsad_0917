@@ -12,4 +12,18 @@ for ori_file, new_file in file_dic.items():
     new_file_path = os.path.join(behav_dir, new_file)
     df = pd.read_csv(file_path, sep='\t')
     df.loc[df['duration'] == 0, 'duration'] = 0.1
+    df = df.sort_values(by='onset')
     df.to_csv(new_file_path, index=False, sep='\t')
+
+
+#%%
+#read error message
+#%%
+import os
+from nipype.utils.filemanip import loadcrash
+data_dir = '/Users/xiaoqianxiao/PycharmProjects/hyak_narsad'
+file_name = 'crash-20250530-103156-xiaoqianxiao-runinfo.a0-a3a18e79-b118-47ba-a726-406552961c15.pklz'
+file_path = os.path.join(str(data_dir), file_name)
+crash_data = loadcrash(file_path)
+print(f"Node: {crash_data['node']}")
+print(f"Traceback: {''.join(crash_data['traceback'])}")
