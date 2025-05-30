@@ -13,7 +13,8 @@ From: narsad-fmri_1st_level_0.0.sif
     run_1st_level_single_trial.py /app/run_1st_level_single_trial.py
     first_level_workflows.py /app/first_level_workflows.py
     utils.py /app/utils.py
-
+    run_LSS.py /app/run_LSS.py
+    creat_LSS_slurm_script.py /app/creat_LSS_slurm_script.py
 %post
     chmod +x /app/run_1st_level.py /app/run_1st_level_single_trial.py
 
