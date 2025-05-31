@@ -75,9 +75,10 @@ if __name__ == '__main__':
             entities = part.entities
             subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
 
-            events_file = os.path.join(behav_dir, f'single_trial_task-Narsad_{task}_half_events.csv')
-            if not os.path.exists(events_file):
-                continue
+            if sub == 'N202' and task == 'phase3':
+                events_file = os.path.join(behav_dir, 'single_trial_task-NARSAD_phase-3_sub-202_half_events.csv')
+            else:
+                events_file = os.path.join(behav_dir, f'single_trial_task-Narsad_{task}_half_events.csv')
 
             try:
                 events_df = pd.read_csv(events_file)

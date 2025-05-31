@@ -60,7 +60,10 @@ if __name__ == '__main__':
     mask_file = layout.get(suffix='mask', extension=['.nii', '.nii.gz'], space=space, **subquery)[0].path
     regressors_file = layout.get(desc='confounds', extension=['.tsv'], **subquery)[0].path
     tr = entities.get('RepetitionTime', 1.5)
-    events_file = os.path.join(behav_dir, f'single_trial_task-Narsad_{task}_half_events.csv')
+    if sub == 'N202' and task == 'phase3':
+        events_file = os.path.join(behav_dir, 'single_trial_task-NARSAD_phase-3_sub-202_half_events.csv')
+    else:
+        events_file = os.path.join(behav_dir, f'single_trial_task-Narsad_{task}_half_events.csv')
 
     inputs = {
         sub: {
