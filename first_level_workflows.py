@@ -173,15 +173,18 @@ def first_level_wf(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
 DATA_ITEMS_LSS = ['bold', 'mask', 'events', 'regressors', 'tr', 'trial_ID']
 
 
-def first_level_wf_LSS(in_files, output_dir, fwhm=6.0, brightness_threshold=1000):
+
+def first_level_wf_LSS(in_files, output_dir, trial_ID, fwhm=6.0, brightness_threshold=1000):
     workflow = pe.Workflow(name='wf_1st_level_LSS')
     workflow.config['execution']['use_relative_paths'] = True
     workflow.config['execution']['remove_unnecessary_outputs'] = False
+    import numpy as np
 
     datasource = pe.Node(niu.Function(function=_dict_ds_lss, output_names=DATA_ITEMS_LSS),
                          name='datasource')
     datasource.inputs.in_dict = in_files
     datasource.iterables = ('sub', sorted(in_files.keys()))
+
 
     # Extract motion parameters from regressors file
     runinfo = pe.Node(niu.Function(
@@ -228,15 +231,19 @@ def first_level_wf_LSS(in_files, output_dir, fwhm=6.0, brightness_threshold=1000
 
     ds_copes = [
         pe.Node(DerivativesDataSink(
-            base_directory=str(output_dir), keep_dtype=False, desc=f'cope{i}'),
-            name=f'ds_cope{i}', run_without_submitting=True)
+            base_directory=str(output_dir), keep_dtype=False,
+            desc=f'trial{int(trial_ID)}_cope{i}'),
+            name=f'ds_cope{i}',
+            run_without_submitting=True)
         for i in range(1, 3)
     ]
 
     ds_varcopes = [
         pe.Node(DerivativesDataSink(
-            base_directory=str(output_dir), keep_dtype=False, desc=f'varcope{i}'),
-            name=f'ds_varcope{i}', run_without_submitting=True)
+            base_directory=str(output_dir), keep_dtype=False,
+            desc=f'trial{int(trial_ID)}_varcope{i}'),
+            name=f'ds_varcope{i}',
+            run_without_submitting=True)
         for i in range(1, 3)
     ]
 
@@ -279,6 +286,6 @@ def first_level_wf_LSS(in_files, output_dir, fwhm=6.0, brightness_threshold=1000
         *[
             (feat_select, ds_varcopes[i - 1], [(f'varcope{i}', 'in_file')])
             for i in range(1, 3)
-        ],
+        ]
     ])
     return workflow

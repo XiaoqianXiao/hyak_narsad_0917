@@ -22,7 +22,7 @@ for ori_file, new_file in file_dic.items():
 import os
 from nipype.utils.filemanip import loadcrash
 data_dir = '/Users/xiaoqianxiao/PycharmProjects/hyak_narsad'
-file_name = 'crash-20250530-103156-xiaoqianxiao-runinfo.a0-a3a18e79-b118-47ba-a726-406552961c15.pklz'
+file_name = 'crash-20250531-153412-xiaoqianxiao-ds_varcope2.a0-9f076ee0-b83c-4bf8-a3ef-5a67717814b8.pklz'
 file_path = os.path.join(str(data_dir), file_name)
 crash_data = loadcrash(file_path)
 print(f"Node: {crash_data['node']}")

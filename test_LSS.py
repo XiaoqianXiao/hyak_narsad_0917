@@ -43,7 +43,7 @@ def run_lss_trial(sub, task, trial_ID, bold_file, mask_file, regressors_file, tr
             'trial_ID': trial_ID  # critical for LSS
         }
     }
-    wf = first_level_wf_LSS(in_dict, output_dir)
+    wf = first_level_wf_LSS(in_dict, output_dir, trial_ID=trial_ID)
     wf.base_dir = os.path.join(work_dir, f'sub-{sub}', f'trial-{trial_ID}')
     wf.run(**plugin_settings)
 

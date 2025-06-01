@@ -79,6 +79,6 @@ if __name__ == '__main__':
     work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss/{task}', f'sub-{sub}', f'trial-{trial_ID}')
     os.makedirs(work_dir, exist_ok=True)
 
-    wf = first_level_wf_LSS(inputs, output_dir)
+    wf = first_level_wf_LSS(inputs, output_dir, trial_ID)
     wf.base_dir = work_dir
     wf.run(**plugin_settings)
