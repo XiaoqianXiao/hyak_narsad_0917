@@ -5,7 +5,7 @@
 scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss"
 
 # Total CPUs you’re willing to consume at once
-TOTAL_CPU_LIMIT=20
+TOTAL_CPU_LIMIT=28
 
 # CPUs requested by *each* job (must match --cpus-per-task in your .sh scripts)
 CPUS_PER_JOB=4
