@@ -54,7 +54,7 @@ module load apptainer
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {container_path} \\
     python3 LSS_2_cate_all_trails.py --subject {sub} --task {task}
 """
-    script_path = os.path.join(work_dir, f'sub_{sub}_trial_{trial_ID}_slurm.sh')
+    script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
     with open(script_path, 'w') as f:
         f.write(slurm_script)
     return script_path
