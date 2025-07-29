@@ -15,7 +15,7 @@ From: narsad-fmri_1st_level_0.0.sif
     run_LSS.py /app/run_LSS.py
     Creat_LSS_slurm_scripts.py /app/Creat_LSS_slurm_scripts.py
     Creat_LSS_2_slurm_scripts.py /app/Creat_LSS_2_slurm_scripts.py
-    LSS_2_cate_all_trails.py /app/LSS_2_cate_all_trails.py
+    LSS_2_cate_all_trials.py /app/LSS_2_cate_all_trials.py
 %post
     chmod +x /app/run_1st_level.py /app/run_1st_level_single_trial.py /app/Creat_LSS_slurm_scripts.py
 
