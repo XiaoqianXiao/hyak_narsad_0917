@@ -14,6 +14,9 @@ from similarity import get_roi_labels
 parser = argparse.ArgumentParser()
 parser.add_argument('--subject', required=True)
 parser.add_argument('--task', required=True)
+parser.add_argument('--mask_img_path', required=True)
+parser.add_argument('--combined_atlas_path', required=True)
+parser.add_argument('--roi_names_file', required=True)
 args = parser.parse_args()
 sub = args.subject
 task = args.task
