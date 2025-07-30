@@ -26,10 +26,10 @@ os.makedirs(results_dir, exist_ok=True)
 
 scrubbed_dir = '/scrubbed_dir'
 container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
-combined_atlas_path = ('/gscratch/scrubbed/fanglab/xiaoqian/parcellation/Tian/3T/'
+combined_atlas_path = ('/scrubbed_dir/parcellation/Tian/3T/'
                       'Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_'
                       'Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_2mm.nii.gz')
-roi_names_file = ('/gscratch/scrubbed/fanglab/xiaoqian/parcellation/Tian/3T/'
+roi_names_file = ('scrubbed_dir/parcellation/Tian/3T/'
                  'Cortex-Subcortex/Schaefer2018_100Parcels_7Networks_order_'
                  'Tian_Subcortex_S1_label.txt')
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
             entities = part.entities
             subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
 
-            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss/{task}')
+            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss_step3/{task}')
             os.makedirs(work_dir, exist_ok=True)
 
             mask_img_path = layout.get(suffix='mask', return_type='file',
