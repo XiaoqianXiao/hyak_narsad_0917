@@ -41,9 +41,9 @@ bold_4d_path = os.path.join(data_dir, f'sub-{sub}_task-{task}.nii')
 
 # Event file
 if sub == 'N202' and task == 'phase3':
-    events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_half_events.csv')
+    events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_events.csv')
 else:
-    events_file = os.path.join(behav_dir, f'task-Narsad_{task}_half_events.csv')
+    events_file = os.path.join(behav_dir, f'task-Narsad_{task}_events.csv')
 
 events = pd.read_csv(events_file)
 trial_types = events['trial_type'].unique()
