@@ -2,7 +2,7 @@
 
 # Directory containing your phase subfolders
 # scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel"
-scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss"
+scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3"
 
 # Total CPUs you’re willing to consume at once
 TOTAL_CPU_LIMIT=28
