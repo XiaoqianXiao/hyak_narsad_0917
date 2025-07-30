@@ -29,7 +29,7 @@ container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_lev
 combined_atlas_path = ('/scrubbed_dir/parcellation/Tian/3T/'
                       'Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_'
                       'Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_2mm.nii.gz')
-roi_names_file = ('scrubbed_dir/parcellation/Tian/3T/'
+roi_names_file = ('/scrubbed_dir/parcellation/Tian/3T/'
                  'Cortex-Subcortex/Schaefer2018_100Parcels_7Networks_order_'
                  'Tian_Subcortex_S1_label.txt')
 
