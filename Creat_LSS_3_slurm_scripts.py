@@ -97,6 +97,7 @@ module load apptainer
 apptainer exec \\
     -B {HOST_DATA_ROOT}:{CONT_DATA_ROOT} \\
     -B {HOST_SCRUBBED_ROOT}:{CONT_SCRUBBED_ROOT} \\
+    -B {HOST_SCRUBBED_ROOT}/repo/hyak_narsad/Creat_LSS_3_slurm_scripts.py:/app/Creat_LSS_3_slurm_scripts.py \\
     -B {HOST_SCRUBBED_ROOT}/repo/hyak_narsad/LSS_3_similarity.py:/app/LSS_3_similarity.py \\
     {container_image} \\
     python3 /app/LSS_3_similarity.py \\
