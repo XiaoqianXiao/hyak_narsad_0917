@@ -54,6 +54,7 @@ apptainer exec \
     -B /gscratch/fang:/data \
     -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir \
     -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/LSS_3_similarity.py:/app/LSS_3_similarity.py \
+    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/similarity.py:/app/similarity.py \
     {container_path} \
     python3 /app/LSS_3_similarity.py \
     --subject {sub} \
