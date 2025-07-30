@@ -45,7 +45,7 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=40G
-#SBATCH --time=2:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.out
 #SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.err
 
