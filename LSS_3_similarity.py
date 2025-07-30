@@ -29,7 +29,7 @@ root_dir = os.getenv('DATA_DIR', '/data')
 project_name = 'NARSAD'
 derivatives_dir = os.path.join(root_dir, project_name, 'MRI', 'derivatives')
 behav_dir = os.path.join(root_dir, project_name, 'MRI', 'source_data', 'behav')
-data_dir = os.path.join(derivatives_dir, 'LSS', 'firstLevel', 'all_subjects')
+data_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'LSS', 'firstLevel', 'all_subjects')
 output_dir = os.path.join(data_dir, 'similarity')
 os.makedirs(output_dir, exist_ok=True)
 
