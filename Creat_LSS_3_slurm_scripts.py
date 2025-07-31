@@ -9,7 +9,6 @@ os.environ['FSLOUTPUTTYPE'] = 'NIFTI_GZ'
 os.environ['FSLDIR'] = '/usr/local/fsl'
 os.environ['PATH'] += os.pathsep + os.path.join(os.environ['FSLDIR'], 'bin')
 
-
 config.set('execution', 'remove_unnecessary_outputs', 'false')
 logging.update_logging(config)
 
@@ -43,9 +42,9 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --partition=cpu-g2
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=40G
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.out
 #SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.err
 
@@ -67,7 +66,6 @@ apptainer exec \
     with open(script_path, 'w') as f:
         f.write(slurm_script)
     return script_path
-
 
 if __name__ == '__main__':
     subjects = layout.get_subjects()
@@ -91,8 +89,8 @@ if __name__ == '__main__':
             os.makedirs(work_dir, exist_ok=True)
 
             mask_img_path = layout.get(suffix='mask', return_type='file',
-                                        extension=['.nii', '.nii.gz'],
-                                        space=query['space'], **subquery)[0]
+                                       extension=['.nii', '.nii.gz'],
+                                       space=query['space'], **subquery)[0]
 
             script_path = create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file)
             print(f"Slurm script created: {script_path}")

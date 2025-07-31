@@ -1,159 +1,142 @@
 import numpy as np
-from nilearn.image import index_img
-from nilearn.maskers import NiftiSpheresMasker
+from nilearn.image import index_img, load_img
+from nilearn.maskers import NiftiSpheresMasker, NiftiLabelsMasker
 from nilearn.input_data import NiftiMasker
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import pearsonr
 import nibabel as nib
-from nilearn.image import load_img
+from joblib import Parallel, delayed
 import os
+import re
 
-
-def searchlight_similarity(img1_path, img2_path, radius=6, affine=None, mask_img=None, similarity='pearson'):
+def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, similarity='pearson', n_jobs=4):
     """
     Compute voxel-wise similarity between two 3D or 4D images using a searchlight approach.
 
     Parameters:
-        img1_path: str or nib.Nifti1Image - first image (3D or 4D)
-        img2_path: str or nib.Nifti1Image - second image (must match img1 shape)
+        img1: nib.Nifti1Image - first image (3D or 4D)
+        img2: nib.Nifti1Image - second image (must match img1 shape)
         radius: int - radius of the searchlight sphere in mm
-        affine: optional affine to transform coordinates (default: from image)
+        affine: optional affine to transform coordinates (default: from mask_img)
         mask_img: binary Nifti image for where to apply searchlight
         similarity: 'pearson' or 'cosine'
+        n_jobs: int - number of parallel jobs for voxel processing
 
     Returns:
-        similarity_map: 3D numpy array with similarity at each voxel
+        similarity_map: nib.Nifti1Image with similarity at each voxel
     """
-    img1 = load_img(img1_path)
-    img2 = load_img(img2_path)
-
     masker = NiftiMasker(mask_img=mask_img)
-    img1_data = masker.fit_transform(img1)
+    masker.fit()
+    img1_data = masker.transform(img1)  # Cache masked data
     img2_data = masker.transform(img2)
 
     coordinates = np.argwhere(masker.mask_img_.get_fdata() > 0)
-    world_coords = nib.affines.apply_affine(masker.affine_, coordinates)
+    if affine is None:
+        affine = masker.mask_img_.affine
+    world_coords = nib.affines.apply_affine(affine, coordinates)
 
-    similarity_values = np.zeros(coordinates.shape[0])
-
-    for i, coord in enumerate(world_coords):
+    def compute_voxel_similarity(coord, img1, img2, radius):
         sphere_masker = NiftiSpheresMasker([coord], radius=radius, detrend=False, standardize=False)
         try:
             sphere_ts1 = sphere_masker.fit_transform(img1)
             sphere_ts2 = sphere_masker.transform(img2)
             if sphere_ts1.shape[1] < 2:
-                similarity_values[i] = np.nan
-                continue
-
+                return np.nan
             if similarity == 'pearson':
                 sim = pearsonr(sphere_ts1.ravel(), sphere_ts2.ravel())[0]
             elif similarity == 'cosine':
                 sim = cosine_similarity(sphere_ts1, sphere_ts2)[0, 0]
             else:
                 raise ValueError("similarity must be 'pearson' or 'cosine'")
-            similarity_values[i] = sim
+            return sim
         except:
-            similarity_values[i] = np.nan
+            return np.nan
 
-    # Fill 3D image with similarity values
+    similarity_values = Parallel(n_jobs=n_jobs)(
+        delayed(compute_voxel_similarity)(coord, img1, img2, radius)
+        for coord in world_coords
+    )
+
     similarity_map = np.full(masker.mask_img_.shape, np.nan)
     for i, coord in enumerate(coordinates):
         similarity_map[tuple(coord)] = similarity_values[i]
 
-    return similarity_map
+    return nib.Nifti1Image(similarity_map, masker.mask_img_.affine)
 
-
-from nilearn.maskers import NiftiLabelsMasker
-
-
-def roi_similarity(img1_path, img2_path, atlas_img, roi_labels, similarity='pearson'):
+def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jobs=4):
     """
     Compute pairwise ROI similarities between two images.
 
     Parameters:
-        img1_path: str or nib.Nifti1Image - first image
-        img2_path: str or nib.Nifti1Image - second image
+        img1: nib.Nifti1Image - first image
+        img2: nib.Nifti1Image - second image
         atlas_img: nib.Nifti1Image - labeled Nifti image (ROIs > 0)
         roi_labels: list - list of valid ROI labels
         similarity: 'pearson' or 'cosine'
+        n_jobs: int - number of parallel jobs for ROI pairs
 
     Returns:
         np.ndarray: Matrix of shape (n_rois, n_rois) with pairwise similarities
     """
-    img1 = load_img(img1_path)
-    img2 = load_img(img2_path)
-
     masker = NiftiLabelsMasker(labels_img=atlas_img, standardize=False, detrend=False)
-    roi_ts1 = masker.fit_transform(img1)
+    roi_ts1 = masker.fit_transform(img1)  # Cache ROI time-series
     roi_ts2 = masker.transform(img2)
 
     n_rois = len(roi_labels)
     sim_matrix = np.zeros((n_rois, n_rois))
 
-    for i in range(n_rois):
-        for j in range(n_rois):
-            ts1 = roi_ts1[:, i]
-            ts2 = roi_ts2[:, j]
-            if similarity == 'pearson':
-                sim = pearsonr(ts1, ts2)[0]
-            elif similarity == 'cosine':
-                sim = cosine_similarity(ts1.reshape(1, -1), ts2.reshape(1, -1))[0, 0]
-            else:
-                raise ValueError("similarity must be 'pearson' or 'cosine'")
-            sim_matrix[i, j] = sim
+    def compute_roi_pair(i, j, ts1, ts2):
+        if similarity == 'pearson':
+            return pearsonr(ts1[:, i], ts2[:, j])[0]
+        elif similarity == 'cosine':
+            return cosine_similarity(ts1[:, i].reshape(1, -1), ts2[:, j].reshape(1, -1))[0, 0]
+        else:
+            raise ValueError("similarity must be 'pearson' or 'cosine'")
+
+    pairs = [(i, j) for i in range(n_rois) for j in range(n_rois)]
+    sim_values = Parallel(n_jobs=n_jobs)(
+        delayed(compute_roi_pair)(i, j, roi_ts1, roi_ts2)
+        for i, j in pairs
+    )
+
+    for idx, (i, j) in enumerate(pairs):
+        sim_matrix[i, j] = sim_values[idx]
 
     return sim_matrix
-
-
-import os
-import re
 
 def load_roi_names(names_file_path, roi_labels):
     """
     File format: alternating lines
       - Odd lines: ROI name (e.g., 'HIP-rh', '7Networks_LH_Vis_1')
       - Even lines: 'label R G B A'
-    Returns: dict with **int** keys and formatted names:
-      - 'REGION-rh' / 'REGION-lh'  -> 'rh_REGION' / 'lh_REGION'
-      - '7Networks_LH_X_Y_1'       -> 'lh_X_Y-1' (drop '7Networks_', last '_' -> '-' before index)
+    Returns: dict with **int** keys and formatted names
     """
-
     def format_name(name: str) -> str:
         s = name.strip()
-
-        # Case A: Subcortical 'REGION-rh' / 'REGION-lh' -> 'rh_REGION' / 'lh_REGION'
         m = re.match(r"^(.+)-(rh|lh)$", s, flags=re.IGNORECASE)
         if m:
             region, hemi = m.group(1), m.group(2).lower()
             return f"{hemi}_{region}"
-
-        # Case B: Schaefer '7Networks_(LH|RH)_(...)'
         m = re.match(r"^7Networks_(LH|RH)_(.+)$", s)
         if m:
-            hemi = m.group(1).lower()   # 'lh' or 'rh'
+            hemi = m.group(1).lower()
             rest = m.group(2)
-            # If ends with '_<number>', convert last '_' to '-' before the index
             m_idx = re.match(r"^(.*)_(\d+)$", rest)
             if m_idx:
                 base, idx = m_idx.group(1), m_idx.group(2)
                 return f"{hemi}_{base}-{idx}"
             else:
                 return f"{hemi}_{rest}"
-
-        # Default: leave as-is (rare)
         return s
 
-    # If file missing: fallback with int keys
     if not os.path.exists(names_file_path):
         print(f"ROI names file not found: {names_file_path}. Using numerical labels.")
         return {int(l): f"combined_ROI_{int(l)}" for l in roi_labels}
 
-    # Parse {int_label: raw_name} from alternating lines
     intlabel_to_rawname = {}
     try:
         with open(names_file_path, "r", encoding="utf-8") as f:
             lines = [ln.strip() for ln in f if ln.strip()]
-
         for i in range(0, len(lines), 2):
             name_line = lines[i]
             if i + 1 >= len(lines):
@@ -164,24 +147,17 @@ def load_roi_names(names_file_path, roi_labels):
             except (IndexError, ValueError):
                 continue
             intlabel_to_rawname[label_int] = name_line
-
     except Exception as e:
         print(f"Error reading ROI names file: {e}. Using numerical labels.")
         return {int(l): f"combined_ROI_{int(l)}" for l in roi_labels}
 
-    # Build mapping with **int** keys and formatted names
     roi_names = {}
     for lab in roi_labels:
-        lab_int = int(lab)  # ensures Python int, not np.float64
+        lab_int = int(lab)
         raw = intlabel_to_rawname.get(lab_int)
         roi_names[lab_int] = format_name(raw) if raw is not None else f"combined_ROI_{lab_int}"
-
-    # Debug example
-    preview = list(roi_names.items())[:10]
-    print(f"Loaded {len(roi_names)} ROI names. Example: {preview}")
+    print(f"Loaded {len(roi_names)} ROI names. Example: {list(roi_names.items())[:10]}")
     return roi_names
-
-
 
 def get_roi_labels(atlas_img, atlas_name):
     atlas_data = atlas_img.get_fdata()
