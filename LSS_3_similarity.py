@@ -13,14 +13,15 @@ import time
 import logging
 
 # Configure logging
-def setup_logging(log_file):
+def setup_logging(log_file=None):
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     # File handler with immediate flush
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
     # Stream handler for stdout
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
@@ -34,7 +35,7 @@ parser.add_argument('--task', required=True)
 parser.add_argument('--mask_img_path', required=True)
 parser.add_argument('--combined_atlas_path', required=True)
 parser.add_argument('--roi_names_file', required=True)
-parser.add_argument('--log_file', required=True, help='Path to progress log file')
+parser.add_argument('--log_file', default=None, help='Path to progress log file')
 parser.add_argument('--profile', action='store_true', help='Enable cProfile for debugging')
 args = parser.parse_args()
 
