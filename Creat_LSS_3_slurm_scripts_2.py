@@ -39,14 +39,14 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=LSS_3_{sub}
 #SBATCH --account=fang
-#SBATCH --partition=ckpt-all
+#SBATCH --partition=cpu-g2
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=40G
 #SBATCH --time=24:00:00
-#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3_2/{task}_sub_{sub}_%j.out
-#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3_2/{task}_sub_{sub}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.err
 
 module load apptainer
 apptainer exec \
