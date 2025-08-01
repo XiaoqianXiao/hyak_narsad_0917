@@ -59,7 +59,7 @@ logger.info(f"Initialized BIDSLayout with {len(layout.get_subjects())} subjects 
 def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file):
     logger.info(f"Creating SLURM script for sub-{sub}, task-{task}")
     logger.info(f"Work directory: {work_dir}, mask path: {mask_img_path}")
-    log_file = f"/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j_progress.log"
+    log_file = f"/scrubbed_dir/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j_progress.log"
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=LSS_3_{sub}
 #SBATCH --account=fang
