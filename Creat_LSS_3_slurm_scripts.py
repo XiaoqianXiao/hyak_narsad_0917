@@ -42,7 +42,7 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --partition=cpu-g2
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=16
 #SBATCH --mem=40G
 #SBATCH --time=24:00:00
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.out
