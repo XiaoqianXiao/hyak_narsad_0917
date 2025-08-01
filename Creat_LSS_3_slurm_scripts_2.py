@@ -22,6 +22,7 @@ output_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'LSS')
 LSS_dir = os.path.join(output_dir, 'firstLevel')
 results_dir = os.path.join(LSS_dir, 'all_subjects')
 os.makedirs(results_dir, exist_ok=True)
+print(f"Created results directory: {results_dir}, exists: {os.path.exists(results_dir)}")
 
 scrubbed_dir = '/scrubbed_dir'
 container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
@@ -32,10 +33,20 @@ roi_names_file = ('/scrubbed_dir/parcellation/Tian/3T/'
                  'Cortex-Subcortex/Schaefer2018_100Parcels_7Networks_order_'
                  'Tian_Subcortex_S1_label.txt')
 
+# Verify input paths
+print(f"Data directory: {data_dir}, exists: {os.path.exists(data_dir)}")
+print(f"Derivatives directory: {derivatives_dir}, exists: {os.path.exists(derivatives_dir)}")
+print(f"Behavioral directory: {behav_dir}, exists: {os.path.exists(behav_dir)}")
+print(f"Atlas path: {combined_atlas_path}, exists: {os.path.exists(combined_atlas_path)}")
+print(f"ROI names file: {roi_names_file}, exists: {os.path.exists(roi_names_file)}")
+
 space = ['MNI152NLin2009cAsym']
 layout = BIDSLayout(str(data_dir), validate=False, derivatives=str(derivatives_dir))
+print(f"Initialized BIDSLayout with {len(layout.get_subjects())} subjects and {len(layout.get_tasks())} tasks")
 
 def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file):
+    print(f"Creating SLURM script for sub-{sub}, task-{task}")
+    print(f"Work directory: {work_dir}, mask path: {mask_img_path}")
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=LSS_3_{sub}
 #SBATCH --account=fang
@@ -60,16 +71,23 @@ apptainer exec \
     --task {task} \
     --mask_img_path {mask_img_path} \
     --combined_atlas_path {combined_atlas_path} \
-    --roi_names_file {roi_names_file}
+    --roi_names_file {roi_names_file} \
+    > /gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j_debug.log 2>&1
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
-    with open(script_path, 'w') as f:
-        f.write(slurm_script)
+    try:
+        with open(script_path, 'w') as f:
+            f.write(slurm_script)
+        print(f"SLURM script created: {script_path}")
+    except Exception as e:
+        print(f"Error writing SLURM script {script_path}: {e}")
     return script_path
 
 if __name__ == '__main__':
     subjects = layout.get_subjects()
     tasks = layout.get_tasks()
+    print(f"Processing {len(subjects)} subjects: {subjects}")
+    print(f"Tasks: {tasks}")
 
     for sub in subjects:
         for task in tasks:
@@ -77,20 +95,32 @@ if __name__ == '__main__':
                 'desc': 'preproc', 'suffix': 'bold', 'extension': ['.nii', '.nii.gz'],
                 'subject': sub, 'task': task, 'space': space[0]
             }
+            print(f"Querying BOLD files for sub-{sub}, task-{task}, query={query}")
             bold_files = layout.get(**query)
             if not bold_files:
+                print(f"No BOLD files found for sub-{sub}, task-{task}")
                 continue
+            print(f"Found {len(bold_files)} BOLD files for sub-{sub}, task-{task}")
 
             part = bold_files[0]
             entities = part.entities
             subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
 
             work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss_step3/{task}')
-            os.makedirs(work_dir, exist_ok=True)
+            try:
+                os.makedirs(work_dir, exist_ok=True)
+                print(f"Created work directory: {work_dir}")
+            except Exception as e:
+                print(f"Error creating work directory {work_dir}: {e}")
+                continue
 
-            mask_img_path = layout.get(suffix='mask', return_type='file',
-                                       extension=['.nii', '.nii.gz'],
-                                       space=query['space'], **subquery)[0]
+            try:
+                mask_img_path = layout.get(suffix='mask', return_type='file',
+                                           extension=['.nii', '.nii.gz'],
+                                           space=query['space'], **subquery)[0]
+                print(f"Mask image path: {mask_img_path}, exists: {os.path.exists(mask_img_path)}")
+            except IndexError:
+                print(f"No mask file found for sub-{sub}, task-{task}, subquery={subquery}")
+                continue
 
             script_path = create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file)
-            print(f"Slurm script created: {script_path}")

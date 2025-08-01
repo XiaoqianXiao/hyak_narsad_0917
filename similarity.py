@@ -25,22 +25,32 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
     Returns:
         similarity_map: nib.Nifti1Image with similarity at each voxel
     """
-    masker = NiftiMasker(mask_img=mask_img)
-    masker.fit()
-    img1_data = masker.transform(img1)  # Cache masked data
-    img2_data = masker.transform(img2)
+    print(f"Starting searchlight similarity with radius={radius}, similarity={similarity}, n_jobs={n_jobs}")
+    try:
+        masker = NiftiMasker(mask_img=mask_img)
+        masker.fit()
+        print(f"Masker fitted, mask shape: {masker.mask_img_.shape}")
+        img1_data = masker.transform(img1)  # Cache masked data
+        img2_data = masker.transform(img2)
+        print(f"Transformed img1 shape: {img1_data.shape}, img2 shape: {img2_data.shape}")
+    except Exception as e:
+        print(f"Error in masker setup or transform: {e}")
+        raise
 
     coordinates = np.argwhere(masker.mask_img_.get_fdata() > 0)
+    print(f"Number of voxels to process: {len(coordinates)}")
     if affine is None:
         affine = masker.mask_img_.affine
+
     world_coords = nib.affines.apply_affine(affine, coordinates)
 
     def compute_voxel_similarity(coord, img1, img2, radius):
-        sphere_masker = NiftiSpheresMasker([coord], radius=radius, detrend=False, standardize=False)
         try:
+            sphere_masker = NiftiSpheresMasker([coord], radius=radius, detrend=False, standardize=False)
             sphere_ts1 = sphere_masker.fit_transform(img1)
             sphere_ts2 = sphere_masker.transform(img2)
             if sphere_ts1.shape[1] < 2:
+                print(f"Skipping voxel {coord}: insufficient data points")
                 return np.nan
             if similarity == 'pearson':
                 sim = pearsonr(sphere_ts1.ravel(), sphere_ts2.ravel())[0]
@@ -49,13 +59,15 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
             else:
                 raise ValueError("similarity must be 'pearson' or 'cosine'")
             return sim
-        except:
+        except Exception as e:
+            print(f"Error computing similarity for voxel {coord}: {e}")
             return np.nan
 
-    similarity_values = Parallel(n_jobs=n_jobs)(
+    similarity_values = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(compute_voxel_similarity)(coord, img1, img2, radius)
         for coord in world_coords
     )
+    print(f"Computed {len(similarity_values)} similarity values")
 
     similarity_map = np.full(masker.mask_img_.shape, np.nan)
     for i, coord in enumerate(coordinates):
@@ -78,23 +90,35 @@ def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jo
     Returns:
         np.ndarray: Matrix of shape (n_rois, n_rois) with pairwise similarities
     """
-    masker = NiftiLabelsMasker(labels_img=atlas_img, standardize=False, detrend=False)
-    roi_ts1 = masker.fit_transform(img1)  # Cache ROI time-series
-    roi_ts2 = masker.transform(img2)
+    print(f"Starting ROI similarity with {len(roi_labels)} ROIs, similarity={similarity}, n_jobs={n_jobs}")
+    try:
+        masker = NiftiLabelsMasker(labels_img=atlas_img, standardize=False, detrend=False)
+        roi_ts1 = masker.fit_transform(img1)  # Cache ROI time-series
+        roi_ts2 = masker.transform(img2)
+        print(f"ROI time-series shape: ts1={roi_ts1.shape}, ts2={roi_ts2.shape}")
+    except Exception as e:
+        print(f"Error in ROI masker setup or transform: {e}")
+        raise
 
     n_rois = len(roi_labels)
     sim_matrix = np.zeros((n_rois, n_rois))
 
     def compute_roi_pair(i, j, ts1, ts2):
-        if similarity == 'pearson':
-            return pearsonr(ts1[:, i], ts2[:, j])[0]
-        elif similarity == 'cosine':
-            return cosine_similarity(ts1[:, i].reshape(1, -1), ts2[:, j].reshape(1, -1))[0, 0]
-        else:
-            raise ValueError("similarity must be 'pearson' or 'cosine'")
+        try:
+            if similarity == 'pearson':
+                sim = pearsonr(ts1[:, i], ts2[:, j])[0]
+            elif similarity == 'cosine':
+                sim = cosine_similarity(ts1[:, i].reshape(1, -1), ts2[:, j].reshape(1, -1))[0, 0]
+            else:
+                raise ValueError("similarity must be 'pearson' or 'cosine'")
+            return sim
+        except Exception as e:
+            print(f"Error computing ROI pair {i} vs {j}: {e}")
+            return np.nan
 
     pairs = [(i, j) for i in range(n_rois) for j in range(n_rois)]
-    sim_values = Parallel(n_jobs=n_jobs)(
+    print(f"Computing {len(pairs)} ROI pairs")
+    sim_values = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(compute_roi_pair)(i, j, roi_ts1, roi_ts2)
         for i, j in pairs
     )
@@ -111,6 +135,7 @@ def load_roi_names(names_file_path, roi_labels):
       - Even lines: 'label R G B A'
     Returns: dict with **int** keys and formatted names
     """
+    print(f"Loading ROI names from {names_file_path}")
     def format_name(name: str) -> str:
         s = name.strip()
         m = re.match(r"^(.+)-(rh|lh)$", s, flags=re.IGNORECASE)
@@ -160,8 +185,11 @@ def load_roi_names(names_file_path, roi_labels):
     return roi_names
 
 def get_roi_labels(atlas_img, atlas_name):
+    print(f"Extracting ROI labels from {atlas_name}")
     atlas_data = atlas_img.get_fdata()
     roi_labels = np.unique(atlas_data)[np.unique(atlas_data) > 0]
     if len(roi_labels) == 0:
-        raise ValueError(f"No valid ROIs found in {atlas_name} atlas (all values <= 0)")
+        print(f"No valid ROIs found in {atlas_name} atlas (all values <= 0)")
+        raise ValueError(f"No valid ROIs found in {atlas_name} atlas")
+    print(f"Found {len(roi_labels)} ROI labels")
     return roi_labels
