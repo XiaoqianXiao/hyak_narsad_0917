@@ -56,11 +56,11 @@ space = ['MNI152NLin2009cAsym']
 layout = BIDSLayout(str(data_dir), validate=False, derivatives=str(derivatives_dir))
 logger.info(f"Initialized BIDSLayout with {len(layout.get_subjects())} subjects and {len(layout.get_tasks())} tasks")
 
-def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file):
-    logger.info(f"Creating SLURM script for sub-{sub}, task-{task}")
+def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file, analysis_type='both'):
+    logger.info(f"Creating SLURM script for sub-{sub}, task-{task}, analysis_type={analysis_type}")
     logger.info(f"Work directory: {work_dir}, mask path: {mask_img_path}")
     slurm_script = f"""#!/bin/bash
-#SBATCH --job-name=LSS_3_{sub}
+#SBATCH --job-name=LSS_3_{sub}_{analysis_type}
 #SBATCH --account=fang
 #SBATCH --partition=cpu-g2
 #SBATCH --nodes=1
@@ -68,8 +68,8 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=40G
 #SBATCH --time=24:00:00
-#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.out
-#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.err
 
 module load apptainer
 apptainer exec \
@@ -83,9 +83,10 @@ apptainer exec \
     --task {task} \
     --mask_img_path {mask_img_path} \
     --combined_atlas_path {combined_atlas_path} \
-    --roi_names_file {roi_names_file}
+    --roi_names_file {roi_names_file} \
+    --analysis_type {analysis_type}
 """
-    script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
+    script_path = os.path.join(work_dir, analysis_type, f'sub_{sub}_slurm.sh')
     try:
         with open(script_path, 'w') as f:
             f.write(slurm_script)
@@ -100,38 +101,42 @@ if __name__ == '__main__':
     logger.info(f"Processing {len(subjects)} subjects: {subjects}")
     logger.info(f"Tasks: {tasks}")
 
+    # Define analysis types to run
+    analysis_types = ['searchlight', 'roi', 'both']  # Can modify to run specific types
+
     for sub in subjects:
         for task in tasks:
-            query = {
-                'desc': 'preproc', 'suffix': 'bold', 'extension': ['.nii', '.nii.gz'],
-                'subject': sub, 'task': task, 'space': space[0]
-            }
-            logger.info(f"Querying BOLD files for sub-{sub}, task-{task}, query={query}")
-            bold_files = layout.get(**query)
-            if not bold_files:
-                logger.warning(f"No BOLD files found for sub-{sub}, task-{task}")
-                continue
-            logger.info(f"Found {len(bold_files)} BOLD files for sub-{sub}, task-{task}")
+            for analysis_type in analysis_types:
+                query = {
+                    'desc': 'preproc', 'suffix': 'bold', 'extension': ['.nii', '.nii.gz'],
+                    'subject': sub, 'task': task, 'space': space[0]
+                }
+                logger.info(f"Querying BOLD files for sub-{sub}, task-{task}, query={query}")
+                bold_files = layout.get(**query)
+                if not bold_files:
+                    logger.warning(f"No BOLD files found for sub-{sub}, task-{task}")
+                    continue
+                logger.info(f"Found {len(bold_files)} BOLD files for sub-{sub}, task-{task}")
 
-            part = bold_files[0]
-            entities = part.entities
-            subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
+                part = bold_files[0]
+                entities = part.entities
+                subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
 
-            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss_step3/{task}')
-            try:
-                os.makedirs(work_dir, exist_ok=True)
-                logger.info(f"Created work directory: {work_dir}")
-            except Exception as e:
-                logger.error(f"Error creating work directory {work_dir}: {e}")
-                continue
+                work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss_step3/{task}')
+                try:
+                    os.makedirs(work_dir, exist_ok=True)
+                    logger.info(f"Created work directory: {work_dir}")
+                except Exception as e:
+                    logger.error(f"Error creating work directory {work_dir}: {e}")
+                    continue
 
-            try:
-                mask_img_path = layout.get(suffix='mask', return_type='file',
-                                           extension=['.nii', '.nii.gz'],
-                                           space=query['space'], **subquery)[0]
-                logger.info(f"Mask image path: {mask_img_path}, exists: {os.path.exists(mask_img_path)}")
-            except IndexError:
-                logger.warning(f"No mask file found for sub-{sub}, task-{task}, subquery={subquery}")
-                continue
+                try:
+                    mask_img_path = layout.get(suffix='mask', return_type='file',
+                                               extension=['.nii', '.nii.gz'],
+                                               space=query['space'], **subquery)[0]
+                    logger.info(f"Mask image path: {mask_img_path}, exists: {os.path.exists(mask_img_path)}")
+                except IndexError:
+                    logger.warning(f"No mask file found for sub-{sub}, task-{task}, subquery={subquery}")
+                    continue
 
-            script_path = create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file)
+                script_path = create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file, analysis_type)
