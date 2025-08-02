@@ -62,7 +62,7 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=LSS_3_{sub}_{analysis_type}
 #SBATCH --account=fang
-#SBATCH --partition=cpu-g2
+#SBATCH --partition=ckpt-all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
