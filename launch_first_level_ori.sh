@@ -18,10 +18,21 @@ echo "Allowing up to $MAX_JOBS concurrent jobs (≈${TOTAL_CPU_LIMIT} CPUs at $C
 
 for phaseID in 2 3; do
   PHASE_DIR="$scripts_dir/phase$phaseID"
-  for analysis_type in "searchlight"; do
-    final_scripts_dir="$PHASE_DIR/$analysis_type"
-    for script in "$final_scripts_dir"/*.sh; do
-      sbatch "$script"
+  echo "Submitting jobs in: $PHASE_DIR"
+
+  for script in "$PHASE_DIR"/*.sh; do
+    # Wait here if we’re already at max concurrent jobs
+    while true; do
+      # Count your running jobs (change -u user if you want to track a different account)
+      RUNNING_JOBS=$(squeue -h -u "$USER" -t R | wc -l)
+      if [ "$RUNNING_JOBS" -lt "$MAX_JOBS" ]; then
+        break
+      fi
+      echo "  ↳ $RUNNING_JOBS jobs running (limit $MAX_JOBS). Sleeping 30s…"
+      sleep 30
     done
+
+    echo "  ↳ Submitting $script"
+    sbatch "$script"
   done
 done
