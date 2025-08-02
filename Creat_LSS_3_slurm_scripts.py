@@ -59,7 +59,6 @@ logger.info(f"Initialized BIDSLayout with {len(layout.get_subjects())} subjects 
 def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file):
     logger.info(f"Creating SLURM script for sub-{sub}, task-{task}")
     logger.info(f"Work directory: {work_dir}, mask path: {mask_img_path}")
-    log_file = f"/scrubbed_dir/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_%j_progress.log"
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=LSS_3_{sub}
 #SBATCH --account=fang
@@ -84,9 +83,7 @@ apptainer exec \
     --task {task} \
     --mask_img_path {mask_img_path} \
     --combined_atlas_path {combined_atlas_path} \
-    --roi_names_file {roi_names_file} \
-    --log_file {log_file} \
-    > {log_file} 2>&1
+    --roi_names_file {roi_names_file}
 """
     script_path = os.path.join(work_dir, f'sub_{sub}_slurm.sh')
     try:
