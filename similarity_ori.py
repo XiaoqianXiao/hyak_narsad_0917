@@ -1,6 +1,6 @@
 import numpy as np
 from nilearn.image import index_img, load_img
-from nilearn.maskers import NiftiLabelsMasker
+from nilearn.maskers import NiftiSpheresMasker, NiftiLabelsMasker
 from nilearn.input_data import NiftiMasker
 from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import pearsonr
@@ -14,12 +14,12 @@ logger = logging.getLogger(__name__)
 
 def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, similarity='pearson', n_jobs=4):
     """
-    Compute voxel-wise similarity between two 3D or 4D images using a cubic searchlight approach.
+    Compute voxel-wise similarity between two 3D or 4D images using a searchlight approach.
 
     Parameters:
         img1: nib.Nifti1Image - first image (3D or 4D)
         img2: nib.Nifti1Image - second image (must match img1 shape)
-        radius: int - half the side length of the cube in mm (cube side = 2 * radius)
+        radius: int - radius of the searchlight sphere in mm
         affine: optional affine to transform coordinates (default: from mask_img)
         mask_img: binary Nifti image for where to apply searchlight
         similarity: 'pearson' or 'cosine'
@@ -28,7 +28,7 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
     Returns:
         similarity_map: nib.Nifti1Image with similarity at each voxel
     """
-    logger.info(f"Starting searchlight similarity with cube side={2*radius}mm, similarity={similarity}, n_jobs={n_jobs}")
+    logger.info(f"Starting searchlight similarity with radius={radius}, similarity={similarity}, n_jobs={n_jobs}")
     try:
         masker = NiftiMasker(mask_img=mask_img)
         masker.fit()
@@ -45,65 +45,34 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
     if affine is None:
         affine = masker.mask_img_.affine
 
-    # Get voxel size from affine matrix (assuming isotropic voxels for simplicity)
-    voxel_size = np.abs(affine[0, 0])  # Assuming cubic voxels
-    half_side_voxels = int(np.round(radius / voxel_size))  # Number of voxels to extend in each direction
+    world_coords = nib.affines.apply_affine(affine, coordinates)
 
-    def compute_voxel_similarity(coord, img1, img2, half_side_voxels, voxel_num, total_voxels):
+    def compute_voxel_similarity(coord, img1, img2, radius, voxel_num, total_voxels):
         try:
-            # Define cube boundaries in voxel space
-            x, y, z = coord
-            x_min, x_max = max(0, x - half_side_voxels), x + half_side_voxels + 1
-            y_min, y_max = max(0, y - half_side_voxels), y + half_side_voxels + 1
-            z_min, z_max = max(0, z - half_side_voxels), z + half_side_voxels + 1
-
-            # Ensure cube stays within image boundaries
-            img_shape = img1.shape[:3]
-            x_max = min(x_max, img_shape[0])
-            y_max = min(y_max, img_shape[1])
-            z_max = min(z_max, img_shape[2])
-
-            # Extract mask data within the cube
-            mask_data = mask_img.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
-            valid_voxels = mask_data > 0
-
-            # Check if there are enough valid voxels
-            n_voxels = np.sum(valid_voxels)
-            if n_voxels < 2:
-                logger.warning(f"Skipping voxel {coord} ({voxel_num}/{total_voxels}): only {n_voxels} valid voxel(s)")
+            sphere_masker = NiftiSpheresMasker([coord], radius=radius, detrend=False, standardize=False)
+            sphere_ts1 = sphere_masker.fit_transform(img1)
+            sphere_ts2 = sphere_masker.transform(img2)
+            if sphere_ts1.shape[1] < 2:
+                logger.warning(f"Skipping voxel {coord} ({voxel_num}/{total_voxels}): insufficient data points")
                 return np.nan
-
-            # Extract data from img1 and img2 within the cube
-            img1_data_cube = img1.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
-            img2_data_cube = img2.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
-
-            # Apply mask to get valid voxel data
-            img1_ts = img1_data_cube[valid_voxels].ravel()
-            img2_ts = img2_data_cube[valid_voxels].ravel()
-
-            # Ensure data is valid
-            if len(img1_ts) < 2 or np.any(np.isnan(img1_ts)) or np.any(np.isnan(img2_ts)):
-                logger.warning(f"Skipping voxel {coord} ({voxel_num}/{total_voxels}): invalid data in cube")
-                return np.nan
-
             if similarity == 'pearson':
-                sim = pearsonr(img1_ts, img2_ts)[0]
+                sim = pearsonr(sphere_ts1.ravel(), sphere_ts2.ravel())[0]
             elif similarity == 'cosine':
-                sim = cosine_similarity(img1_ts.reshape(1, -1), img2_ts.reshape(1, -1))[0, 0]
+                sim = cosine_similarity(sphere_ts1, sphere_ts2)[0, 0]
             else:
                 raise ValueError("similarity must be 'pearson' or 'cosine'")
-            logger.debug(f"Voxel {voxel_num}/{total_voxels} at {coord} similarity: {sim:.4f}, voxels: {n_voxels}")
+            logger.debug(f"Voxel {voxel_num}/{total_voxels} at {coord} similarity: {sim:.4f}")
             return sim
         except Exception as e:
             logger.error(f"Error computing similarity for voxel {coord} ({voxel_num}/{total_voxels}): {e}")
             return np.nan
 
-    total_voxels = len(coordinates)
+    total_voxels = len(world_coords)
     similarity_values = Parallel(n_jobs=n_jobs, verbose=0)(
-        delayed(compute_voxel_similarity)(coord, img1, img2, half_side_voxels, idx + 1, total_voxels)
-        for idx, coord in enumerate(coordinates)
+        delayed(compute_voxel_similarity)(coord, img1, img2, radius, idx + 1, total_voxels)
+        for idx, coord in enumerate(world_coords)
     )
-    logger.info(f"Computed {len(similarity_values)} similarity values, skipped {sum(np.isnan(similarity_values))} voxels")
+    logger.info(f"Computed {len(similarity_values)} similarity values")
 
     similarity_map = np.full(masker.mask_img_.shape, np.nan)
     for i, coord in enumerate(coordinates):

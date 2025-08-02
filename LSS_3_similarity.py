@@ -116,7 +116,7 @@ def main():
             img1 = index_img(bold_4d, i)
             img2 = index_img(bold_4d, j)
             start_time = time.time()
-            result = searchlight_similarity(img1, img2, radius=4, mask_img=mask_img, n_jobs=4).get_fdata()
+            result = searchlight_similarity(img1, img2, radius=6, mask_img=mask_img, n_jobs=4).get_fdata()
             elapsed = time.time() - start_time
             logger.info(f"Searchlight pair {pair_num}/{total_pairs} (trials {i} vs {j}) completed in {elapsed:.2f} seconds")
             return result
