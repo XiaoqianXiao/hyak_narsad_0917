@@ -39,11 +39,11 @@ except Exception as e:
 scrubbed_dir = '/scrubbed_dir'
 container_path = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 combined_atlas_path = ('/scrubbed_dir/parcellation/Tian/3T/'
-                      'Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_'
-                      'Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_2mm.nii.gz')
+                       'Cortex-Subcortex/MNIvolumetric/Schaefer2018_100Parcels_7Networks_order_'
+                       'Tian_Subcortex_S1_3T_MNI152NLin2009cAsym_2mm.nii.gz')
 roi_names_file = ('/scrubbed_dir/parcellation/Tian/3T/'
-                 'Cortex-Subcortex/Schaefer2018_100Parcels_7Networks_order_'
-                 'Tian_Subcortex_S1_label.txt')
+                  'Cortex-Subcortex/Schaefer2018_100Parcels_7Networks_order_'
+                  'Tian_Subcortex_S1_label.txt')
 
 # Verify input paths
 logger.info(f"Data directory: {data_dir}, exists: {os.path.exists(data_dir)}")
@@ -56,18 +56,18 @@ space = ['MNI152NLin2009cAsym']
 layout = BIDSLayout(str(data_dir), validate=False, derivatives=str(derivatives_dir))
 logger.info(f"Initialized BIDSLayout with {len(layout.get_subjects())} subjects and {len(layout.get_tasks())} tasks")
 
-def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file, analysis_type='both'):
+def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file, analysis_type='both', batch_size=1000, n_jobs=12, profile=False):
     logger.info(f"Creating SLURM script for sub-{sub}, task-{task}, analysis_type={analysis_type}")
-    logger.info(f"Work directory: {work_dir}, mask path: {mask_img_path}")
-    slurm_script = f"""#!/bin/bash
-#SBATCH --job-name=LSS_3_{sub}_{analysis_type}
-#SBATCH --account=fang
-#SBATCH --partition=ckpt-all
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --mem=40G
-#SBATCH --time=24:00:00
+    profile_flag = "--profile" if profile else ""
+    slurm_script = f"""#!/bin/bash 
+#SBATCH --job-name=LSS_3_{sub}_{analysis_type}                                                                    
+#SBATCH --account=fang                                                                                            
+#SBATCH --partition=ckpt-all                                                                                      
+#SBATCH --nodes=1                                                                                                 
+#SBATCH --ntasks=1                                                                                                
+#SBATCH --cpus-per-task=16                                                                                        
+#SBATCH --mem=40G                                                                                                 
+#SBATCH --time=04:00:00                                                                                           
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.out
 #SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.err
 
@@ -84,7 +84,10 @@ apptainer exec \
     --mask_img_path {mask_img_path} \
     --combined_atlas_path {combined_atlas_path} \
     --roi_names_file {roi_names_file} \
-    --analysis_type {analysis_type}
+    --analysis_type {analysis_type} \
+    --batch_size {batch_size} \
+    --n_jobs {n_jobs} \
+    {profile_flag}
 """
     script_path = os.path.join(work_dir, analysis_type, f'sub_{sub}_slurm.sh')
     try:
@@ -102,7 +105,7 @@ if __name__ == '__main__':
     logger.info(f"Tasks: {tasks}")
 
     # Define analysis types to run
-    analysis_types = ['searchlight', 'roi', 'both']  # Can modify to run specific types
+    analysis_types = ['searchlight', 'roi', 'both']
 
     for sub in subjects:
         for task in tasks:
@@ -139,4 +142,7 @@ if __name__ == '__main__':
                     logger.warning(f"No mask file found for sub-{sub}, task-{task}, subquery={subquery}")
                     continue
 
-                script_path = create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path, roi_names_file, analysis_type)
+                script_path = create_slurm_script(
+                    sub, task, work_dir, mask_img_path, combined_atlas_path,
+                    roi_names_file, analysis_type, batch_size=1000, n_jobs=12, profile=False
+                )

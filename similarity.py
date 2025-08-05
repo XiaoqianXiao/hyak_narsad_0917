@@ -12,7 +12,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, similarity='pearson', n_jobs=4):
+
+def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, similarity='pearson', n_jobs=12, batch_size=1000):
     """
     Compute voxel-wise similarity between two 3D or 4D images using a cubic searchlight approach.
 
@@ -24,11 +25,13 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
         mask_img: binary Nifti image for where to apply searchlight
         similarity: 'pearson' or 'cosine'
         n_jobs: int - number of parallel jobs for voxel processing
+        batch_size: int - number of voxels to process per batch
 
     Returns:
         similarity_map: nib.Nifti1Image with similarity at each voxel
     """
-    logger.info(f"Starting searchlight similarity with cube side={2*radius}mm, similarity={similarity}, n_jobs={n_jobs}")
+    logger.info(
+        f"Starting searchlight similarity with cube side={2 * radius}mm, similarity={similarity}, n_jobs={n_jobs}")
     try:
         masker = NiftiMasker(mask_img=mask_img)
         masker.fit()
@@ -49,67 +52,81 @@ def searchlight_similarity(img1, img2, radius=6, affine=None, mask_img=None, sim
     voxel_size = np.abs(affine[0, 0])  # Assuming cubic voxels
     half_side_voxels = int(np.round(radius / voxel_size))  # Number of voxels to extend in each direction
 
-    def compute_voxel_similarity(coord, img1, img2, half_side_voxels, voxel_num, total_voxels):
+    def compute_batch_similarity(coords, img1, img2, mask_img, half_side_voxels, batch_idx, total_batches):
+        """
+        Compute similarity for a batch of voxels.
+        """
         try:
-            # Define cube boundaries in voxel space
-            x, y, z = coord
-            x_min, x_max = max(0, x - half_side_voxels), x + half_side_voxels + 1
-            y_min, y_max = max(0, y - half_side_voxels), y + half_side_voxels + 1
-            z_min, z_max = max(0, z - half_side_voxels), z + half_side_voxels + 1
-
-            # Ensure cube stays within image boundaries
+            batch_results = []
+            img1_data = img1.get_fdata()
+            img2_data = img2.get_fdata()
+            mask_data = mask_img.get_fdata()
             img_shape = img1.shape[:3]
-            x_max = min(x_max, img_shape[0])
-            y_max = min(y_max, img_shape[1])
-            z_max = min(z_max, img_shape[2])
 
-            # Extract mask data within the cube
-            mask_data = mask_img.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
-            valid_voxels = mask_data > 0
+            for voxel_num, coord in enumerate(coords, 1):
+                x, y, z = coord
+                x_min, x_max = max(0, x - half_side_voxels), x + half_side_voxels + 1
+                y_min, y_max = max(0, y - half_side_voxels), y + half_side_voxels + 1
+                z_min, z_max = max(0, z - half_side_voxels), z + half_side_voxels + 1
 
-            # Check if there are enough valid voxels
-            n_voxels = np.sum(valid_voxels)
-            if n_voxels < 2:
-                logger.warning(f"Skipping voxel {coord} ({voxel_num}/{total_voxels}): only {n_voxels} valid voxel(s)")
-                return np.nan
+                x_max = min(x_max, img_shape[0])
+                y_max = min(y_max, img_shape[1])
+                z_max = min(z_max, img_shape[2])
 
-            # Extract data from img1 and img2 within the cube
-            img1_data_cube = img1.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
-            img2_data_cube = img2.get_fdata()[x_min:x_max, y_min:y_max, z_min:z_max]
+                # Extract mask data within the cube
+                mask_cube = mask_data[x_min:x_max, y_min:y_max, z_min:z_max]
+                valid_voxels = mask_cube > 0
+                n_voxels = np.sum(valid_voxels)
+                if n_voxels < 2:
+                    batch_results.append(np.nan)
+                    continue
 
-            # Apply mask to get valid voxel data
-            img1_ts = img1_data_cube[valid_voxels].ravel()
-            img2_ts = img2_data_cube[valid_voxels].ravel()
+                # Extract data from img1 and img2 within the cube
+                img1_cube = img1_data[x_min:x_max, y_min:y_max, z_min:z_max][valid_voxels].ravel()
+                img2_cube = img2_data[x_min:x_max, y_min:y_max, z_min:z_max][valid_voxels].ravel()
 
-            # Ensure data is valid
-            if len(img1_ts) < 2 or np.any(np.isnan(img1_ts)) or np.any(np.isnan(img2_ts)):
-                logger.warning(f"Skipping voxel {coord} ({voxel_num}/{total_voxels}): invalid data in cube")
-                return np.nan
+                if len(img1_cube) < 2 or np.any(np.isnan(img1_cube)) or np.any(np.isnan(img2_cube)):
+                    batch_results.append(np.nan)
+                    continue
 
-            if similarity == 'pearson':
-                sim = pearsonr(img1_ts, img2_ts)[0]
-            elif similarity == 'cosine':
-                sim = cosine_similarity(img1_ts.reshape(1, -1), img2_ts.reshape(1, -1))[0, 0]
-            else:
-                raise ValueError("similarity must be 'pearson' or 'cosine'")
-            logger.debug(f"Voxel {voxel_num}/{total_voxels} at {coord} similarity: {sim:.4f}, voxels: {n_voxels}")
-            return sim
+                if similarity == 'pearson':
+                    sim = pearsonr(img1_cube, img2_cube)[0]
+                elif similarity == 'cosine':
+                    sim = cosine_similarity(img1_cube.reshape(1, -1), img2_cube.reshape(1, -1))[0, 0]
+                else:
+                    raise ValueError("similarity must be 'pearson' or 'cosine'")
+                batch_results.append(sim)
+
+            logger.info(f"Processed batch {batch_idx}/{total_batches}, {len(coords)} voxels")
+            return batch_results
         except Exception as e:
-            logger.error(f"Error computing similarity for voxel {coord} ({voxel_num}/{total_voxels}): {e}")
-            return np.nan
+            logger.error(f"Error in batch {batch_idx}: {e}")
+            return [np.nan] * len(coords)
 
+    # Split coordinates into batches
     total_voxels = len(coordinates)
-    similarity_values = Parallel(n_jobs=n_jobs, verbose=0)(
-        delayed(compute_voxel_similarity)(coord, img1, img2, half_side_voxels, idx + 1, total_voxels)
-        for idx, coord in enumerate(coordinates)
-    )
-    logger.info(f"Computed {len(similarity_values)} similarity values, skipped {sum(np.isnan(similarity_values))} voxels")
+    batches = [coordinates[i:i + batch_size] for i in range(0, total_voxels, batch_size)]
+    total_batches = len(batches)
+    logger.info(f"Processing {total_voxels} voxels in {total_batches} batches of {batch_size} voxels")
 
+    # Process batches in parallel
+    batch_results = Parallel(n_jobs=n_jobs, verbose=0)(
+        delayed(compute_batch_similarity)(batch_coords, img1, img2, mask_img, half_side_voxels, idx + 1, total_batches)
+        for idx, batch_coords in enumerate(batches)
+    )
+
+    # Flatten results
+    similarity_values = [val for batch in batch_results for val in batch]
+    logger.info(
+        f"Computed {len(similarity_values)} similarity values, skipped {sum(np.isnan(similarity_values))} voxels")
+
+    # Create output similarity map
     similarity_map = np.full(masker.mask_img_.shape, np.nan)
     for i, coord in enumerate(coordinates):
         similarity_map[tuple(coord)] = similarity_values[i]
 
     return nib.Nifti1Image(similarity_map, masker.mask_img_.affine)
+
 
 def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jobs=4):
     """
@@ -139,7 +156,7 @@ def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jo
     n_rois = len(roi_labels)
     sim_matrix = np.zeros((n_rois, n_rois))
 
-    def compute_roi_pair(i, j, ts1, ts2, pair_num, total_pairs):
+    def compute_roi_pair(i, j, ts1, ts2, similarity, pair_num, total_pairs):
         try:
             if similarity == 'pearson':
                 sim = pearsonr(ts1[:, i], ts2[:, j])[0]
@@ -157,7 +174,7 @@ def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jo
     total_pairs = len(pairs)
     logger.info(f"Computing {total_pairs} ROI pairs")
     sim_values = Parallel(n_jobs=n_jobs, verbose=0)(
-        delayed(compute_roi_pair)(i, j, roi_ts1, roi_ts2, idx + 1, total_pairs)
+        delayed(compute_roi_pair)(i, j, roi_ts1, roi_ts2, similarity, idx + 1, total_pairs)
         for idx, (i, j) in enumerate(pairs)
     )
 
@@ -166,21 +183,30 @@ def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jo
 
     return sim_matrix
 
-def load_roi_names(names_file_path, roi_labels):
+
+
+def load_roi_names(names_file_path: str, roi_labels: list) -> dict:
     """
-    File format: alternating lines
+    Load ROI names from a file with alternating lines:
       - Odd lines: ROI name (e.g., 'HIP-rh', '7Networks_LH_Vis_1')
       - Even lines: 'label R G B A'
-    Returns: dict with **int** keys and formatted names
+    Args:
+        names_file_path (str): Path to the ROI names file
+        roi_labels (list): List of ROI labels (integers or strings convertible to integers)
+    Returns:
+        dict: Dictionary mapping integer labels to formatted ROI names
     """
+    logger = logging.getLogger(__name__)
     logger.info(f"Loading ROI names from {names_file_path}")
+
     def format_name(name: str) -> str:
+        """Format ROI name based on specific patterns."""
         s = name.strip()
         m = re.match(r"^(.+)-(rh|lh)$", s, flags=re.IGNORECASE)
         if m:
             region, hemi = m.group(1), m.group(2).lower()
             return f"{hemi}_{region}"
-        m = re.match(r"^7Networks_(LH|RH)_(.+)$", s)
+        m = re.match(r"^7Networks_(LH|RH)_(.+)$", s, flags=re.IGNORECASE)
         if m:
             hemi = m.group(1).lower()
             rest = m.group(2)
@@ -188,39 +214,55 @@ def load_roi_names(names_file_path, roi_labels):
             if m_idx:
                 base, idx = m_idx.group(1), m_idx.group(2)
                 return f"{hemi}_{base}-{idx}"
-            else:
-                return f"{hemi}_{rest}"
+            return f"{hemi}_{rest}"
         return s
+
+    default_names = {int(l): f"combined_ROI_{int(l)}" for l in roi_labels if l is not None}
 
     if not os.path.exists(names_file_path):
         logger.warning(f"ROI names file not found: {names_file_path}. Using numerical labels.")
-        return {int(l): f"combined_ROI_{int(l)}" for l in roi_labels}
+        return default_names
 
     intlabel_to_rawname = {}
     try:
         with open(names_file_path, "r", encoding="utf-8") as f:
             lines = [ln.strip() for ln in f if ln.strip()]
         for i in range(0, len(lines), 2):
-            name_line = lines[i]
             if i + 1 >= len(lines):
+                logger.warning(f"Incomplete pair at line {i+1}: missing label data")
                 continue
+            name_line = lines[i]
             nums = lines[i + 1].split()
+            if not nums:
+                logger.warning(f"Empty label line at {i+2}")
+                continue
             try:
                 label_int = int(nums[0])
-            except (IndexError, ValueError):
+                intlabel_to_rawname[label_int] = name_line
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Invalid label format at line {i+2}: {lines[i+1]} - {e}")
                 continue
-            intlabel_to_rawname[label_int] = name_line
     except Exception as e:
-        logger.error(f"Error reading ROI names file: {e}. Using numerical labels.")
-        return {int(l): f"combined_ROI_{int(l)}" for l in roi_labels}
+        logger.error(f"Error reading ROI names file {names_file_path}: {e}. Using numerical labels.")
+        return default_names
 
     roi_names = {}
     for lab in roi_labels:
-        lab_int = int(lab)
-        raw = intlabel_to_rawname.get(lab_int)
-        roi_names[lab_int] = format_name(raw) if raw is not None else f"combined_ROI_{lab_int}"
+        try:
+            lab_int = int(lab)
+            raw = intlabel_to_rawname.get(lab_int)
+            roi_names[lab_int] = format_name(raw) if raw is not None else f"combined_ROI_{lab_int}"
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid ROI label: {lab}. Skipping.")
+            continue
+
+    if not roi_names:
+        logger.warning("No valid ROI names loaded. Using numerical labels.")
+        return default_names
+
     logger.info(f"Loaded {len(roi_names)} ROI names. Example: {list(roi_names.items())[:10]}")
     return roi_names
+
 
 def get_roi_labels(atlas_img, atlas_name):
     logger.info(f"Extracting ROI labels from {atlas_name}")

@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from itertools import combinations, product
-from nilearn.image import load_img, index_img, new_img_like, resample_img
+from nilearn.image import load_img, index_img, new_img_like, resample_to_img
 import nibabel as nib
 from similarity import searchlight_similarity, roi_similarity, load_roi_names, get_roi_labels
 from joblib import Parallel, delayed
@@ -17,7 +17,6 @@ def setup_logging():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    # Stream handler for stdout
     stream_handler = logging.StreamHandler()
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
@@ -32,6 +31,8 @@ parser.add_argument('--combined_atlas_path', required=True)
 parser.add_argument('--roi_names_file', required=True)
 parser.add_argument('--analysis_type', choices=['searchlight', 'roi', 'both'], default='both',
                     help='Type of analysis to run: searchlight, roi, or both')
+parser.add_argument('--batch_size', type=int, default=1000, help='Number of voxels per batch for searchlight')
+parser.add_argument('--n_jobs', type=int, default=12, help='Number of parallel jobs')
 parser.add_argument('--profile', action='store_true', help='Enable cProfile for debugging')
 args = parser.parse_args()
 
@@ -73,32 +74,47 @@ def main():
     try:
         bold_4d = load_img(bold_4d_path)
         logger.info(f"BOLD shape: {bold_4d.shape}, affine: {bold_4d.affine}")
-        # Check for invalid data
         bold_data = bold_4d.get_fdata()
-        if np.any(np.isnan(bold_data)) or np.all(bold_data == 0, axis=3).any():
+        nan_count = np.sum(np.isnan(bold_data))
+        zero_count = np.sum(np.all(bold_data == 0, axis=3))
+        logger.info(f"BOLD data NaN count: {nan_count}, all-zero voxel count: {zero_count}")
+        if nan_count > 0 or zero_count > 0:
             logger.warning("BOLD data contains NaNs or all-zero voxels, which may cause computation issues")
     except Exception as e:
         logger.error(f"Error loading BOLD data {bold_4d_path}: {e}")
         return
 
-    # Load mask (needed for both analyses)
+    # Load mask
     try:
         mask_img = load_img(mask_img_path)
         logger.info(f"Mask shape: {mask_img.shape}, affine: {mask_img.affine}")
-        logger.info(f"Number of voxels in mask: {np.sum(mask_img.get_fdata() > 0)}")
+        mask_data = mask_img.get_fdata()
+        valid_voxels = np.sum(mask_data > 0)
+        nan_count = np.sum(np.isnan(mask_data))
+        logger.info(f"Number of voxels in mask: {valid_voxels}, NaN count: {nan_count}")
+        if valid_voxels == 0:
+            logger.error("Mask contains no valid voxels (all values <= 0)")
+            return
+        if nan_count > 0:
+            logger.warning("Mask contains NaNs, which may cause resampling issues")
     except Exception as e:
         logger.error(f"Error loading mask {mask_img_path}: {e}")
         return
 
-    # Load atlas and ROI names (needed for ROI or both)
+    # Load atlas and ROI names
     if analysis_type in ['roi', 'both']:
         try:
             combined_atlas = load_img(combined_atlas_path)
             logger.info(f"Atlas shape: {combined_atlas.shape}, affine: {combined_atlas.affine}")
-            # Check atlas data
             atlas_data = combined_atlas.get_fdata()
-            if np.any(np.isnan(atlas_data)):
+            nan_count = np.sum(np.isnan(atlas_data))
+            unique_labels = np.unique(atlas_data[atlas_data > 0])
+            logger.info(f"Atlas NaN count: {nan_count}, unique positive labels: {len(unique_labels)}")
+            if nan_count > 0:
                 logger.warning("Atlas data contains NaNs, which may cause resampling issues")
+            if len(unique_labels) == 0:
+                logger.error("Atlas contains no valid ROIs (all values <= 0)")
+                return
         except Exception as e:
             logger.error(f"Error loading atlas {combined_atlas_path}: {e}")
             return
@@ -108,7 +124,7 @@ def main():
         roi_names = load_roi_names(roi_names_file, combined_roi_labels)
         logger.info(f"Loaded {len(roi_names)} ROI names")
 
-    # Event file (needed for both analyses)
+    # Event file
     if sub == 'N202' and task == 'phase3':
         events_file = os.path.join(behav_dir, 'task-NARSAD_phase-3_sub-202_events.csv')
     else:
@@ -123,8 +139,6 @@ def main():
     trial_types = events['trial_type'].unique()
     logger.info(f"Trial types: {trial_types}")
     trial_to_type = dict(enumerate(events['trial_type'].values))
-
-    # Extract trial indices by type
     type_to_indices = {t: [i for i, tt in trial_to_type.items() if tt == t] for t in trial_types}
     logger.info(f"Type to indices: {type_to_indices}")
 
@@ -135,11 +149,12 @@ def main():
                 img1 = index_img(bold_4d, i)
                 img2 = index_img(bold_4d, j)
                 start_time = time.time()
-                result = searchlight_similarity(img1, img2, radius=6, mask_img=mask_img, n_jobs=4).get_fdata()
+                result = searchlight_similarity(
+                    img1, img2, radius=6, mask_img=mask_img, similarity='pearson',
+                    n_jobs=args.n_jobs, batch_size=args.batch_size
+                ).get_fdata()
                 elapsed = time.time() - start_time
                 logger.info(f"Searchlight pair {pair_num}/{total_pairs} (trials {i} vs {j}) completed in {elapsed:.2f} seconds")
-                skipped_voxels = np.sum(np.isnan(result))
-                logger.info(f"Searchlight pair {pair_num}/{total_pairs} skipped {skipped_voxels} voxels")
                 return result
             except Exception as e:
                 logger.error(f"Error computing searchlight similarity for trials {i} vs {j}: {e}")
@@ -152,10 +167,11 @@ def main():
             logger.info(f"Within-type {ttype}: {total_pairs} pairs")
             if pairs:
                 start_time = time.time()
-                sim_maps = []
-                for idx, (i, j) in enumerate(pairs, 1):
-                    result = compute_searchlight_pair(i, j, bold_4d, mask_img, idx, total_pairs)
-                    sim_maps.append(result)
+                # Parallelize pair computations
+                sim_maps = Parallel(n_jobs=2, verbose=0)(
+                    delayed(compute_searchlight_pair)(i, j, bold_4d, mask_img, idx, total_pairs)
+                    for idx, (i, j) in enumerate(pairs, 1)
+                )
                 elapsed = time.time() - start_time
                 logger.info(f"Searchlight for {ttype} completed in {elapsed:.2f} seconds")
                 sim_maps = [m for m in sim_maps if m is not None]
@@ -179,10 +195,10 @@ def main():
             logger.info(f"Between-type {t1}-{t2}: {total_pairs} pairs")
             if pairs:
                 start_time = time.time()
-                sims = []
-                for idx, (i, j) in enumerate(pairs, 1):
-                    result = compute_searchlight_pair(i, j, bold_4d, mask_img, idx, total_pairs)
-                    sims.append(result)
+                sims = Parallel(n_jobs=2, verbose=0)(
+                    delayed(compute_searchlight_pair)(i, j, bold_4d, mask_img, idx, total_pairs)
+                    for idx, (i, j) in enumerate(pairs, 1)
+                )
                 elapsed = time.time() - start_time
                 logger.info(f"Searchlight for {t1}-{t2} completed in {elapsed:.2f} seconds")
                 sims = [m for m in sims if m is not None]
@@ -212,40 +228,30 @@ def main():
         for t1, t2 in combinations(trial_types, 2):
             roi_dfs[f"between-{t1}-{t2}"] = pd.DataFrame(index=index, columns=columns)
 
-        # Align atlas with BOLD
+        # Align atlas with BOLD using mask
         combined_atlas_aligned = combined_atlas
         if not np.allclose(bold_4d.affine, combined_atlas.affine) or bold_4d.shape[:3] != combined_atlas.shape:
-            logger.info(f"Resampling atlas to match BOLD data")
+            logger.info(f"Resampling atlas to match BOLD data space using mask")
             try:
-                # Extract a single 3D volume from bold_4d as the target image
-                bold_3d = index_img(bold_4d, 0)
-                logger.info(f"Using BOLD 3D reference: shape={bold_3d.shape}, affine={bold_3d.affine}")
-                combined_atlas_aligned = resample_img(combined_atlas, bold_3d, interpolation='nearest')
+                logger.info(f"Using mask as reference: shape={mask_img.shape}, affine={mask_img.affine}")
+                combined_atlas_aligned = resample_to_img(combined_atlas, mask_img, interpolation='nearest')
                 logger.info(f"Resampled atlas shape: {combined_atlas_aligned.shape}, affine: {combined_atlas_aligned.affine}")
                 atlas_data = combined_atlas_aligned.get_fdata()
-                if np.any(np.isnan(atlas_data)):
+                nan_count = np.sum(np.isnan(atlas_data))
+                unique_labels = np.unique(atlas_data[atlas_data > 0])
+                logger.info(f"Resampled atlas NaN count: {nan_count}, unique positive labels: {len(unique_labels)}")
+                if nan_count > 0:
                     logger.warning("Resampled atlas contains NaNs")
-                if np.sum(atlas_data > 0) == 0:
+                if len(unique_labels) == 0:
                     logger.error("Resampled atlas has no valid ROIs (all values <= 0)")
                     return
             except Exception as e:
                 logger.error(f"Error resampling atlas: {e}")
                 return
+        else:
+            logger.info("Atlas and BOLD have compatible affines and shapes, using original atlas")
 
         # Compute ROI similarities
-        def compute_roi_pair(i, j, bold_4d, atlas_img, roi_labels, pair_num, total_pairs):
-            try:
-                img1 = index_img(bold_4d, i)
-                img2 = index_img(bold_4d, j)
-                start_time = time.time()
-                result = roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jobs=4)
-                elapsed = time.time() - start_time
-                logger.info(f"ROI pair {pair_num}/{total_pairs} (trials {i} vs {j}) completed in {elapsed:.2f} seconds")
-                return result
-            except Exception as e:
-                logger.error(f"Error computing ROI similarity for trials {i} vs {j}: {e}")
-                return None
-
         n_rois = len(combined_roi_labels)
         logger.info(f"Number of ROIs: {n_rois}, pairs: {n_rois * n_rois}")
         # Within-type
@@ -255,10 +261,12 @@ def main():
             logger.info(f"Within-type {ttype} ROI: {total_pairs} pairs")
             if pairs:
                 start_time = time.time()
-                sim_matrices = []
-                for idx, (i, j) in enumerate(pairs, 1):
-                    result = compute_roi_pair(i, j, bold_4d, combined_atlas_aligned, combined_roi_labels, idx, total_pairs)
-                    sim_matrices.append(result)
+                sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
+                    delayed(roi_similarity)(
+                        index_img(bold_4d, i), index_img(bold_4d, j),
+                        combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
+                    ) for i, j in pairs
+                )
                 elapsed = time.time() - start_time
                 logger.info(f"ROI similarity for {ttype} completed in {elapsed:.2f} seconds")
                 sim_matrices = [m for m in sim_matrices if m is not None]
@@ -278,10 +286,12 @@ def main():
             logger.info(f"Between-type {t1}-{t2} ROI: {total_pairs} pairs")
             if pairs:
                 start_time = time.time()
-                sim_matrices = []
-                for idx, (i, j) in enumerate(pairs, 1):
-                    result = compute_roi_pair(i, j, bold_4d, combined_atlas_aligned, combined_roi_labels, idx, total_pairs)
-                    sim_matrices.append(result)
+                sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
+                    delayed(roi_similarity)(
+                        index_img(bold_4d, i), index_img(bold_4d, j),
+                        combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
+                    ) for i, j in pairs
+                )
                 elapsed = time.time() - start_time
                 logger.info(f"ROI similarity for {t1}-{t2} completed in {elapsed:.2f} seconds")
                 sim_matrices = [m for m in sim_matrices if m is not None]
@@ -311,11 +321,18 @@ if __name__ == '__main__':
         profiler.enable()
         main()
         profiler.disable()
-        stats = pstats.Stats(profiler).sort_stats('cumtime')
+        output_path = os.path.join(
+            os.getenv('DATA_DIR', '/data'), 'NARSAD', 'MRI', 'derivatives',
+            'fMRI_analysis', 'LSS', 'firstLevel', 'all_subjects', 'similarity', 'searchlight',
+            f'sub-{args.subject}_task-{args.task}_profile.prof'
+        )
         try:
-            stats.dump_stats('profile.out')
-            logger.info("Profiling stats saved to profile.out")
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            profiler.dump_stats(output_path)
+            stats = pstats.Stats(output_path)
+            stats.sort_stats('cumulative').print_stats(20)
+            logger.info(f"Profiling stats saved to {output_path}")
         except Exception as e:
-            logger.error(f"Error saving profile.out: {e}")
+            logger.error(f"Error saving profiling stats to {output_path}: {e}")
     else:
         main()
