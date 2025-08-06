@@ -8,16 +8,16 @@ scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss"
 
 PHASE_DIR="$scripts_dir/phase3"
 echo "Submitting jobs in: $PHASE_DIR"
-for script in "$PHASE_DIR"/sub_N260_trial_*_slurm.sh; do
-    [ -e "$script" ] || continue   # skip if no file matches
-    echo "Submitting $script"
-    sbatch "$script"
-done
-#for subID in 260; do
-#    for script in "$PHASE_DIR"/sub_N${subID}_trial_*_slurm.sh; do
-#        [ -e "$script" ] || continue   # skip if no file matches
-#        echo "Submitting $script"
-#        sbatch "$script"
-#    done
+#for script in "$PHASE_DIR"/sub_N260_trial_*_slurm.sh; do
+#    [ -e "$script" ] || continue   # skip if no file matches
+#    echo "Submitting $script"
+#    sbatch "$script"
 #done
+for subID in 120 202 249 255; do
+    for script in "$PHASE_DIR"/sub_N${subID}_trial_*_slurm.sh; do
+        [ -e "$script" ] || continue   # skip if no file matches
+        echo "Submitting $script"
+        sbatch "$script"
+    done
+done
 
