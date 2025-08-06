@@ -78,7 +78,7 @@ if __name__ == '__main__':
             entities = part.entities
             subquery = {k: v for k, v in entities.items() if k in ['subject', 'task', 'run']}
 
-            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss/{task}')
+            work_dir = os.path.join(scrubbed_dir, project_name, f'work_flows/Lss_step2/{task}')
             os.makedirs(work_dir, exist_ok=True)
 
             script_path = create_slurm_script(sub, task, work_dir)
