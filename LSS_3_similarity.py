@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from itertools import combinations, product
-from nilearn.image import load_img, index_img, new_img_like, resample_to_img
+from nilearn.image import load_img, new_img_like, resample_to_img
 import nibabel as nib
 from similarity import searchlight_similarity, roi_similarity, load_roi_names, get_roi_labels
 from joblib import Parallel, delayed
@@ -11,6 +11,7 @@ import cProfile
 import pstats
 import time
 import logging
+
 
 # Configure logging
 def setup_logging():
@@ -21,6 +22,7 @@ def setup_logging():
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
     return logger
+
 
 # Args
 parser = argparse.ArgumentParser()
@@ -37,6 +39,7 @@ parser.add_argument('--profile', action='store_true', help='Enable cProfile for 
 args = parser.parse_args()
 
 logger = setup_logging()
+
 
 def main():
     sub = args.subject
@@ -138,171 +141,154 @@ def main():
         return
     trial_types = events['trial_type'].unique()
     logger.info(f"Trial types: {trial_types}")
-    trial_to_type = dict(enumerate(events['trial_type'].values))
+
+    # Validate trial indices against BOLD data
+    n_trials = bold_4d.shape[3]
+    logger.info(f"Number of trials in BOLD data: {n_trials}")
+
+    trial_to_type = {i: tt for i, tt in enumerate(events['trial_type'].values) if i < n_trials}
+    if len(trial_to_type) < len(events):
+        logger.warning(
+            f"Event file has {len(events)} trials, but BOLD data has only {n_trials}. Truncating to {n_trials} trials.")
     type_to_indices = {t: [i for i, tt in trial_to_type.items() if tt == t] for t in trial_types}
     logger.info(f"Type to indices: {type_to_indices}")
+    for ttype, indices in type_to_indices.items():
+        if not indices:
+            logger.warning(f"No valid trial indices for trial type {ttype}. Skipping.")
+            type_to_indices[ttype] = []
 
     # ---- Searchlight Similarity ----
     if analysis_type in ['searchlight', 'both']:
-        def compute_searchlight_pair(i, j, bold_4d, mask_img, pair_num, total_pairs):
-            try:
-                img1 = index_img(bold_4d, i)
-                img2 = index_img(bold_4d, j)
-                start_time = time.time()
-                result = searchlight_similarity(
-                    img1, img2, radius=6, mask_img=mask_img, similarity='pearson',
-                    n_jobs=args.n_jobs, batch_size=args.batch_size
-                ).get_fdata()
-                elapsed = time.time() - start_time
-                logger.info(f"Searchlight pair {pair_num}/{total_pairs} (trials {i} vs {j}) completed in {elapsed:.2f} seconds")
-                return result
-            except Exception as e:
-                logger.error(f"Error computing searchlight similarity for trials {i} vs {j}: {e}")
-                return None
+        # Compute all pair similarities
+        all_pairs = list(combinations(range(n_trials), 2))
+        logger.info(f"Computing searchlight similarity for {len(all_pairs)} total pairs")
+        start_time = time.time()
+        pair_results = searchlight_similarity(
+            bold_4d, mask_img, radius=6, trial_pairs=all_pairs,
+            similarity='pearson', n_jobs=args.n_jobs, batch_size=args.batch_size
+        )
+        elapsed = time.time() - start_time
+        logger.info(f"Searchlight similarity for all pairs completed in {elapsed:.2f} seconds")
+
+        # Organize results by trial type
+        pair_sims = {(i, j): sim.get_fdata() for i, j, sim in pair_results if sim is not None}
+        logger.info(f"Valid similarity maps: {len(pair_sims)} out of {len(all_pairs)}")
+
+        # Initialize output maps
+        output_maps = {f"within-{ttype}": np.zeros(mask_data.shape, dtype=np.float32) for ttype in trial_types}
+        for t1, t2 in combinations(trial_types, 2):
+            output_maps[f"between-{t1}-{t2}"] = np.zeros(mask_data.shape, dtype=np.float32)
 
         # Within-type similarity
-        for ttype, indices in type_to_indices.items():
+        for ttype in trial_types:
+            indices = type_to_indices[ttype]
             pairs = list(combinations(indices, 2))
-            total_pairs = len(pairs)
-            logger.info(f"Within-type {ttype}: {total_pairs} pairs")
-            if pairs:
-                start_time = time.time()
-                # Parallelize pair computations
-                sim_maps = Parallel(n_jobs=2, verbose=0)(
-                    delayed(compute_searchlight_pair)(i, j, bold_4d, mask_img, idx, total_pairs)
-                    for idx, (i, j) in enumerate(pairs, 1)
-                )
-                elapsed = time.time() - start_time
-                logger.info(f"Searchlight for {ttype} completed in {elapsed:.2f} seconds")
-                sim_maps = [m for m in sim_maps if m is not None]
-                if sim_maps:
-                    avg_map = np.nanmean(np.stack(sim_maps, axis=0), axis=0)
-                    avg_img = new_img_like(mask_img, avg_map)
-                    output_path = os.path.join(output_dir, 'searchlight', f"sub-{sub}_task-{task}_within-{ttype}.nii.gz")
-                    logger.info(f"Saving searchlight to {output_path}")
-                    try:
-                        nib.save(avg_img, output_path)
-                        logger.info(f"Saved searchlight for {ttype}")
-                    except Exception as e:
-                        logger.error(f"Error saving searchlight {output_path}: {e}")
-                else:
-                    logger.warning(f"No valid searchlight maps for {ttype}")
+            if not pairs:
+                logger.warning(f"No pairs for within-type {ttype}")
+                continue
+            sim_maps = [pair_sims.get((i, j)) for i, j in pairs if (i, j) in pair_sims]
+            if sim_maps:
+                avg_map = np.nanmean(np.stack(sim_maps, axis=0), axis=0)
+                output_maps[f"within-{ttype}"] = avg_map
+                output_img = new_img_like(mask_img, avg_map)
+                output_path = os.path.join(output_dir, 'searchlight', f"sub-{sub}_task-{task}_within-{ttype}.nii.gz")
+                logger.info(f"Saving searchlight to {output_path}")
+                try:
+                    nib.save(output_img, output_path)
+                    logger.info(f"Saved searchlight for {ttype}")
+                except Exception as e:
+                    logger.error(f"Error saving searchlight {output_path}: {e}")
+            else:
+                logger.warning(f"No valid searchlight maps for {ttype}")
 
         # Between-type similarity
         for t1, t2 in combinations(trial_types, 2):
             pairs = list(product(type_to_indices[t1], type_to_indices[t2]))
-            total_pairs = len(pairs)
-            logger.info(f"Between-type {t1}-{t2}: {total_pairs} pairs")
-            if pairs:
-                start_time = time.time()
-                sims = Parallel(n_jobs=2, verbose=0)(
-                    delayed(compute_searchlight_pair)(i, j, bold_4d, mask_img, idx, total_pairs)
-                    for idx, (i, j) in enumerate(pairs, 1)
-                )
-                elapsed = time.time() - start_time
-                logger.info(f"Searchlight for {t1}-{t2} completed in {elapsed:.2f} seconds")
-                sims = [m for m in sims if m is not None]
-                if sims:
-                    avg_map = np.nanmean(np.stack(sims, axis=0), axis=0)
-                    avg_img = new_img_like(mask_img, avg_map)
-                    output_path = os.path.join(output_dir, 'searchlight', f"sub-{sub}_task-{task}_between-{t1}-{t2}.nii.gz")
-                    logger.info(f"Saving searchlight to {output_path}")
-                    try:
-                        nib.save(avg_img, output_path)
-                        logger.info(f"Saved searchlight for {t1}-{t2}")
-                    except Exception as e:
-                        logger.error(f"Error saving searchlight {output_path}: {e}")
-                else:
-                    logger.warning(f"No valid searchlight maps for {t1}-{t2}")
+            if not pairs:
+                logger.warning(f"No pairs for between-type {t1}-{t2}")
+                continue
+            sim_maps = [pair_sims.get((min(i, j), max(i, j))) for i, j in pairs if (min(i, j), max(i, j)) in pair_sims]
+            if sim_maps:
+                avg_map = np.nanmean(np.stack(sim_maps, axis=0), axis=0)
+                output_maps[f"between-{t1}-{t2}"] = avg_map
+                output_img = new_img_like(mask_img, avg_map)
+                output_path = os.path.join(output_dir, 'searchlight', f"sub-{sub}_task-{task}_between-{t1}-{t2}.nii.gz")
+                logger.info(f"Saving searchlight to {output_path}")
+                try:
+                    nib.save(output_img, output_path)
+                    logger.info(f"Saved searchlight for {t1}-{t2}")
+                except Exception as e:
+                    logger.error(f"Error saving searchlight {output_path}: {e}")
+            else:
+                logger.warning(f"No valid searchlight maps for {t1}-{t2}")
 
     # ---- ROI-based Similarity ----
     if analysis_type in ['roi', 'both']:
         logger.info(f"Computing ROI similarities for sub-{sub}, task-{task}")
-
-        # Initialize DataFrames
-        roi_dfs = {}
-        columns = [roi_names[label] for label in combined_roi_labels]
-        index = [roi_names[label] for label in combined_roi_labels]
-        for ttype in trial_types:
-            roi_dfs[f"within-{ttype}"] = pd.DataFrame(index=index, columns=columns)
-        for t1, t2 in combinations(trial_types, 2):
-            roi_dfs[f"between-{t1}-{t2}"] = pd.DataFrame(index=index, columns=columns)
-
-        # Align atlas with BOLD using mask
         combined_atlas_aligned = combined_atlas
         if not np.allclose(bold_4d.affine, combined_atlas.affine) or bold_4d.shape[:3] != combined_atlas.shape:
-            logger.info(f"Resampling atlas to match BOLD data space using mask")
+            logger.info(f"Resampling atlas to match BOLD data space")
             try:
-                logger.info(f"Using mask as reference: shape={mask_img.shape}, affine={mask_img.affine}")
                 combined_atlas_aligned = resample_to_img(combined_atlas, mask_img, interpolation='nearest')
-                logger.info(f"Resampled atlas shape: {combined_atlas_aligned.shape}, affine: {combined_atlas_aligned.affine}")
-                atlas_data = combined_atlas_aligned.get_fdata()
-                nan_count = np.sum(np.isnan(atlas_data))
-                unique_labels = np.unique(atlas_data[atlas_data > 0])
-                logger.info(f"Resampled atlas NaN count: {nan_count}, unique positive labels: {len(unique_labels)}")
-                if nan_count > 0:
-                    logger.warning("Resampled atlas contains NaNs")
-                if len(unique_labels) == 0:
-                    logger.error("Resampled atlas has no valid ROIs (all values <= 0)")
-                    return
+                logger.info(f"Resampled atlas shape: {combined_atlas_aligned.shape}")
             except Exception as e:
                 logger.error(f"Error resampling atlas: {e}")
                 return
-        else:
-            logger.info("Atlas and BOLD have compatible affines and shapes, using original atlas")
 
-        # Compute ROI similarities
-        n_rois = len(combined_roi_labels)
-        logger.info(f"Number of ROIs: {n_rois}, pairs: {n_rois * n_rois}")
+        # Compute all pair similarities
+        all_pairs = list(combinations(range(n_trials), 2))
+        logger.info(f"Computing ROI similarity for {len(all_pairs)} total pairs")
+        start_time = time.time()
+        sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
+            delayed(roi_similarity)(
+                index_img(bold_4d, i), index_img(bold_4d, j),
+                combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
+            ) for i, j in all_pairs
+        )
+        elapsed = time.time() - start_time
+        logger.info(f"ROI similarity for all pairs completed in {elapsed:.2f} seconds")
+        pair_sims = {(i, j): sim for (i, j), sim in zip(all_pairs, sim_matrices) if sim is not None}
+
+        # Initialize DataFrames
+        columns = [roi_names[label] for label in combined_roi_labels]
+        index = [roi_names[label] for label in combined_roi_labels]
+        roi_dfs = {f"within-{ttype}": pd.DataFrame(index=index, columns=columns) for ttype in trial_types}
+        for t1, t2 in combinations(trial_types, 2):
+            roi_dfs[f"between-{t1}-{t2}"] = pd.DataFrame(index=index, columns=columns)
+
         # Within-type
-        for ttype, indices in type_to_indices.items():
+        for ttype in trial_types:
+            indices = type_to_indices[ttype]
             pairs = list(combinations(indices, 2))
-            total_pairs = len(pairs)
-            logger.info(f"Within-type {ttype} ROI: {total_pairs} pairs")
-            if pairs:
-                start_time = time.time()
-                sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
-                    delayed(roi_similarity)(
-                        index_img(bold_4d, i), index_img(bold_4d, j),
-                        combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
-                    ) for i, j in pairs
-                )
-                elapsed = time.time() - start_time
-                logger.info(f"ROI similarity for {ttype} completed in {elapsed:.2f} seconds")
-                sim_matrices = [m for m in sim_matrices if m is not None]
-                if sim_matrices:
-                    avg_sim_matrix = np.nanmean(np.stack(sim_matrices, axis=0), axis=0)
-                    df = roi_dfs[f"within-{ttype}"]
-                    for i in range(n_rois):
-                        for j in range(n_rois):
-                            df.iloc[i, j] = avg_sim_matrix[i, j]
-                else:
-                    logger.warning(f"No valid ROI matrices for {ttype}")
+            if not pairs:
+                logger.warning(f"No pairs for within-type {ttype}")
+                continue
+            sim_matrices = [pair_sims.get((i, j)) for i, j in pairs if (i, j) in pair_sims]
+            if sim_matrices:
+                avg_sim_matrix = np.nanmean(np.stack(sim_matrices, axis=0), axis=0)
+                df = roi_dfs[f"within-{ttype}"]
+                for i in range(len(combined_roi_labels)):
+                    for j in range(len(combined_roi_labels)):
+                        df.iloc[i, j] = avg_sim_matrix[i, j]
+            else:
+                logger.warning(f"No valid ROI matrices for {ttype}")
 
         # Between-type
         for t1, t2 in combinations(trial_types, 2):
             pairs = list(product(type_to_indices[t1], type_to_indices[t2]))
-            total_pairs = len(pairs)
-            logger.info(f"Between-type {t1}-{t2} ROI: {total_pairs} pairs")
-            if pairs:
-                start_time = time.time()
-                sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
-                    delayed(roi_similarity)(
-                        index_img(bold_4d, i), index_img(bold_4d, j),
-                        combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
-                    ) for i, j in pairs
-                )
-                elapsed = time.time() - start_time
-                logger.info(f"ROI similarity for {t1}-{t2} completed in {elapsed:.2f} seconds")
-                sim_matrices = [m for m in sim_matrices if m is not None]
-                if sim_matrices:
-                    avg_sim_matrix = np.nanmean(np.stack(sim_matrices, axis=0), axis=0)
-                    df = roi_dfs[f"between-{t1}-{t2}"]
-                    for i in range(n_rois):
-                        for j in range(n_rois):
-                            df.iloc[i, j] = avg_sim_matrix[i, j]
-                else:
-                    logger.warning(f"No valid ROI matrices for {t1}-{t2}")
+            if not pairs:
+                logger.warning(f"No pairs for between-type {t1}-{t2}")
+                continue
+            sim_matrices = [pair_sims.get((min(i, j), max(i, j))) for i, j in pairs if
+                            (min(i, j), max(i, j)) in pair_sims]
+            if sim_matrices:
+                avg_sim_matrix = np.nanmean(np.stack(sim_matrices, axis=0), axis=0)
+                df = roi_dfs[f"between-{t1}-{t2}"]
+                for i in range(len(combined_roi_labels)):
+                    for j in range(len(combined_roi_labels)):
+                        df.iloc[i, j] = avg_sim_matrix[i, j]
+            else:
+                logger.warning(f"No valid ROI matrices for {t1}-{t2}")
 
         # Save ROI DataFrames
         for df_name, df in roi_dfs.items():
@@ -313,6 +299,7 @@ def main():
                 logger.info(f"Saved {df_name} ROI similarities")
             except Exception as e:
                 logger.error(f"Error saving ROI {output_path}: {e}")
+
 
 if __name__ == '__main__':
     if args.profile:

@@ -66,7 +66,7 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --nodes=1                                                                                                 
 #SBATCH --ntasks=1                                                                                                
 #SBATCH --cpus-per-task=16                                                                                        
-#SBATCH --mem=40G                                                                                                 
+#SBATCH --mem=20G                                                                                                 
 #SBATCH --time=04:00:00                                                                                           
 #SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.out
 #SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.err
@@ -104,9 +104,7 @@ if __name__ == '__main__':
     logger.info(f"Processing {len(subjects)} subjects: {subjects}")
     logger.info(f"Tasks: {tasks}")
 
-    # Define analysis types to run
     analysis_types = ['searchlight', 'roi', 'both']
-
     for sub in subjects:
         for task in tasks:
             for analysis_type in analysis_types:
@@ -114,7 +112,7 @@ if __name__ == '__main__':
                     'desc': 'preproc', 'suffix': 'bold', 'extension': ['.nii', '.nii.gz'],
                     'subject': sub, 'task': task, 'space': space[0]
                 }
-                logger.info(f"Querying BOLD files for sub-{sub}, task-{task}, query={query}")
+                logger.info(f"Querying BOLD files for sub-{sub}, task-{task}")
                 bold_files = layout.get(**query)
                 if not bold_files:
                     logger.warning(f"No BOLD files found for sub-{sub}, task-{task}")
@@ -139,7 +137,7 @@ if __name__ == '__main__':
                                                space=query['space'], **subquery)[0]
                     logger.info(f"Mask image path: {mask_img_path}, exists: {os.path.exists(mask_img_path)}")
                 except IndexError:
-                    logger.warning(f"No mask file found for sub-{sub}, task-{task}, subquery={subquery}")
+                    logger.warning(f"No mask file found for sub-{sub}, task-{task}")
                     continue
 
                 script_path = create_slurm_script(
