@@ -2,7 +2,7 @@
 
 # Directory containing your phase subfolders
 # scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/firstLevel"
-scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3"
+scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss"
 #scripts_dir="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/phase3/searchlight"
 
 # Total CPUs you’re willing to consume at once
@@ -18,10 +18,17 @@ echo "Allowing up to $MAX_JOBS concurrent jobs (≈${TOTAL_CPU_LIMIT} CPUs at $C
 
 for phaseID in 2 3; do
   PHASE_DIR="$scripts_dir/phase$phaseID"
-  for analysis_type in "searchlight"; do
-    final_scripts_dir="$PHASE_DIR/$analysis_type"
-    for script in "$final_scripts_dir"/*.sh; do
-      sbatch "$script"
-    done
+  for script in "$PHASE_DIR"/*.sh; do
+    sbatch "$script"
   done
 done
+
+#for phaseID in 2 3; do
+#  PHASE_DIR="$scripts_dir/phase$phaseID"
+#  for analysis_type in "searchlight"; do
+#    final_scripts_dir="$PHASE_DIR/$analysis_type"
+#    for script in "$final_scripts_dir"/*.sh; do
+#      sbatch "$script"
+#    done
+#  done
+#done
