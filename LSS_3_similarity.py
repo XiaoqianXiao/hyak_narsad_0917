@@ -225,36 +225,36 @@ def main():
     # ---- ROI-based Similarity ----
     if analysis_type in ['roi', 'both']:
         logger.info(f"Computing ROI similarities for sub-{sub}, task-{task}")
-        combined_atlas_aligned = combined_atlas
-        if not np.allclose(bold_4d.affine, combined_atlas.affine) or bold_4d.shape[:3] != combined_atlas.shape:
-            logger.info(f"Resampling atlas to match BOLD data space")
-            try:
+        try:
+            combined_atlas = load_img(combined_atlas_path)
+            combined_atlas_aligned = combined_atlas
+            if not np.allclose(bold_4d.affine, combined_atlas.affine) or bold_4d.shape[:3] != combined_atlas.shape:
+                logger.info(f"Resampling atlas to match BOLD data space")
                 combined_atlas_aligned = resample_to_img(combined_atlas, mask_img, interpolation='nearest')
                 logger.info(f"Resampled atlas shape: {combined_atlas_aligned.shape}")
-            except Exception as e:
-                logger.error(f"Error resampling atlas: {e}")
-                return
+        except Exception as e:
+            logger.error(f"Error loading or resampling atlas: {e}")
+            return
 
         # Compute all pair similarities
         all_pairs = list(combinations(range(n_trials), 2))
         logger.info(f"Computing ROI similarity for {len(all_pairs)} total pairs")
         start_time = time.time()
-        sim_matrices = Parallel(n_jobs=args.n_jobs, verbose=0)(
-            delayed(roi_similarity)(
-                index_img(bold_4d, i), index_img(bold_4d, j),
-                combined_atlas_aligned, combined_roi_labels, similarity='pearson', n_jobs=1
-            ) for i, j in all_pairs
+        pair_results = roi_similarity(
+            bold_4d, combined_atlas_aligned, combined_roi_labels, trial_pairs=all_pairs,
+            similarity='pearson', n_jobs=args.n_jobs
         )
         elapsed = time.time() - start_time
         logger.info(f"ROI similarity for all pairs completed in {elapsed:.2f} seconds")
-        pair_sims = {(i, j): sim for (i, j), sim in zip(all_pairs, sim_matrices) if sim is not None}
+        pair_sims = {(i, j): sim for i, j, sim in pair_results if sim is not None}
 
         # Initialize DataFrames
         columns = [roi_names[label] for label in combined_roi_labels]
         index = [roi_names[label] for label in combined_roi_labels]
-        roi_dfs = {f"within-{ttype}": pd.DataFrame(index=index, columns=columns) for ttype in trial_types}
+        roi_dfs = {f"within-{ttype}": pd.DataFrame(index=index, columns=columns, dtype=np.float32) for ttype in
+                   trial_types}
         for t1, t2 in combinations(trial_types, 2):
-            roi_dfs[f"between-{t1}-{t2}"] = pd.DataFrame(index=index, columns=columns)
+            roi_dfs[f"between-{t1}-{t2}"] = pd.DataFrame(index=index, columns=columns, dtype=np.float32)
 
         # Within-type
         for ttype in trial_types:

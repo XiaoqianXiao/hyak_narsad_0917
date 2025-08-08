@@ -124,49 +124,73 @@ def searchlight_similarity(bold_4d, mask_img, radius=6, trial_pairs=None, simila
     return results
 
 
-def roi_similarity(img1, img2, atlas_img, roi_labels, similarity='pearson', n_jobs=4):
+def roi_similarity(bold_4d, atlas_img, roi_labels, trial_pairs, similarity='pearson', n_jobs=4):
     """
-    Compute pairwise ROI similarities between two images.
+    Compute pairwise ROI similarities for multiple trial pairs from a 4D BOLD image.
+
+    Parameters:
+        bold_4d: nib.Nifti1Image - 4D BOLD image (x, y, z, trials)
+        atlas_img: nib.Nifti1Image - labeled atlas image (ROIs > 0)
+        roi_labels: list - list of valid ROI labels
+        trial_pairs: list of (i, j) - trial index pairs to compare
+        similarity: 'pearson' or 'cosine'
+        n_jobs: int - number of parallel jobs for ROI pairs
+
+    Returns:
+        list of (i, j, np.ndarray) - similarity matrices (n_rois, n_rois) for each trial pair
     """
-    logger.info(f"Starting ROI similarity with {len(roi_labels)} ROIs, similarity={similarity}, n_jobs={n_jobs}")
+    logger.info(f"Starting ROI similarity with {len(roi_labels)} ROIs, {len(trial_pairs)} trial pairs, similarity={similarity}, n_jobs={n_jobs}")
     try:
         masker = NiftiLabelsMasker(labels_img=atlas_img, standardize=False, detrend=False)
-        roi_ts1 = masker.fit_transform(img1)
-        roi_ts2 = masker.transform(img2)
-        logger.info(f"ROI time-series shape: ts1={roi_ts1.shape}, ts2={roi_ts2.shape}")
+        bold_ts = masker.fit_transform(bold_4d)  # Shape: (n_voxels, n_trials)
+        logger.info(f"ROI time-series shape: {bold_ts.shape}")
     except Exception as e:
         logger.error(f"Error in ROI masker setup or transform: {e}")
         raise
 
     n_rois = len(roi_labels)
-    sim_matrix = np.zeros((n_rois, n_rois))
+    # Validate ROIs
+    valid_rois = []
+    for i in range(n_rois):
+        if bold_ts.shape[0] < 2 or np.all(bold_ts[:, i] == 0) or np.any(np.isnan(bold_ts[:, i])):
+            logger.warning(f"ROI {i} (label {roi_labels[i]}) has invalid data: shape={bold_ts[:, i].shape}, all zeros={np.all(bold_ts[:, i] == 0)}, NaNs={np.any(np.isnan(bold_ts[:, i]))}")
+            continue
+        valid_rois.append(i)
+    logger.info(f"Valid ROIs: {len(valid_rois)}/{n_rois}")
 
-    def compute_roi_pair(i, j, ts1, ts2, similarity, pair_num, total_pairs):
+    def compute_trial_pair(i, j, bold_ts, valid_rois, similarity, pair_num, total_pairs):
         try:
-            if similarity == 'pearson':
-                sim = pearsonr(ts1[:, i], ts2[:, j])[0]
-            elif similarity == 'cosine':
-                sim = cosine_similarity(ts1[:, i].reshape(1, -1), ts2[:, j].reshape(1, -1))[0, 0]
-            else:
-                raise ValueError("similarity must be 'pearson' or 'cosine'")
-            logger.debug(f"ROI pair {pair_num}/{total_pairs} ({i} vs {j}) similarity: {sim:.4f}")
-            return sim
+            sim_matrix = np.full((n_rois, n_rois), np.nan, dtype=np.float32)
+            for ri, rj in [(ri, rj) for ri in valid_rois for rj in valid_rois]:
+                ts1 = bold_ts[:, ri]
+                ts2 = bold_ts[:, rj]
+                if np.any(np.isnan(ts1)) or np.any(np.isnan(ts2)) or len(ts1) < 2 or len(ts2) < 2:
+                    logger.debug(f"Trial pair {pair_num}/{total_pairs} ({i} vs {j}), ROI {ri} vs {rj} skipped: invalid data")
+                    continue
+                if np.all(ts1 == 0) or np.all(ts2 == 0):
+                    logger.debug(f"Trial pair {pair_num}/{total_pairs} ({i} vs {j}), ROI {ri} vs {rj} skipped: all zeros")
+                    continue
+                if similarity == 'pearson':
+                    sim = pearsonr(ts1, ts2)[0]
+                elif similarity == 'cosine':
+                    sim = cosine_similarity(ts1.reshape(1, -1), ts2.reshape(1, -1))[0, 0]
+                else:
+                    raise ValueError("similarity must be 'pearson' or 'cosine'")
+                sim_matrix[ri, rj] = sim
+            logger.debug(f"Computed trial pair {pair_num}/{total_pairs} ({i} vs {j})")
+            return (i, j, sim_matrix)
         except Exception as e:
-            logger.error(f"Error computing ROI pair {i} vs {j} ({pair_num}/{total_pairs}): {e}")
-            return np.nan
+            logger.error(f"Error computing trial pair {i} vs {j} ({pair_num}/{total_pairs}): {e}")
+            return (i, j, np.full((n_rois, n_rois), np.nan, dtype=np.float32))
 
-    pairs = [(i, j) for i in range(n_rois) for j in range(n_rois)]
-    total_pairs = len(pairs)
-    logger.info(f"Computing {total_pairs} ROI pairs")
-    sim_values = Parallel(n_jobs=n_jobs, verbose=0)(
-        delayed(compute_roi_pair)(i, j, roi_ts1, roi_ts2, similarity, idx + 1, total_pairs)
-        for idx, (i, j) in enumerate(pairs)
+    logger.info(f"Computing {len(trial_pairs)} trial pairs")
+    pair_results = Parallel(n_jobs=n_jobs, verbose=0)(
+        delayed(compute_trial_pair)(i, j, bold_ts, valid_rois, similarity, idx + 1, len(trial_pairs))
+        for idx, (i, j) in enumerate(trial_pairs)
     )
 
-    for idx, (i, j) in enumerate(pairs):
-        sim_matrix[i, j] = sim_values[idx]
-
-    return sim_matrix
+    logger.info(f"Computed {len(pair_results)} trial pair similarity matrices")
+    return pair_results
 
 
 def load_roi_names(names_file_path: str, roi_labels: list) -> dict:
