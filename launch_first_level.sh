@@ -16,13 +16,19 @@ MAX_JOBS=$(( TOTAL_CPU_LIMIT / CPUS_PER_JOB ))
 
 echo "Allowing up to $MAX_JOBS concurrent jobs (≈${TOTAL_CPU_LIMIT} CPUs at $CPUS_PER_JOB CPUs/job)."
 
+#for phaseID in 2 3; do
+#  PHASE_DIR="$scripts_dir/phase$phaseID"
+#  for script in "$PHASE_DIR"/*.sh; do
+#    sbatch "$script"
+#  done
+#done
 for phaseID in 2 3; do
   PHASE_DIR="$scripts_dir/phase$phaseID"
-  for script in "$PHASE_DIR"/*.sh; do
+  final_scripts_dir="$PHASE_DIR/searchlight"
+  for script in "$final_scripts_dir"/*.sh; do
     sbatch "$script"
   done
 done
-
 #for phaseID in 2 3; do
 #  PHASE_DIR="$scripts_dir/phase$phaseID"
 #  for analysis_type in "searchlight"; do
