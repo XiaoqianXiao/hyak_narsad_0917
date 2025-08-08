@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from itertools import combinations, product
-from nilearn.image import load_img, new_img_like, resample_to_img
+from nilearn.image import load_img, index_img, new_img_like, resample_to_img
 import nibabel as nib
 from similarity import searchlight_similarity, roi_similarity, load_roi_names, get_roi_labels
 from joblib import Parallel, delayed
