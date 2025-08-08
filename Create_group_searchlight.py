@@ -24,18 +24,18 @@ def generate_slurm_scripts(method, work_dir, slurm_dir):
     # Slurm template
     slurm_template = """#!/bin/bash
 #SBATCH --job-name=group_searchlight_{map_type}_{method}
-#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_group_searchlight/%s_group_searchlight_{map_type}_{method}_%%j.out
-#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_group_searchlight/%s_group_searchlight_{map_type}_{method}_%%j.err
+#SBATCH --output=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/%s_group_searchlight_{map_type}_{method}_%%j.out
+#SBATCH --error=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/%s_group_searchlight_{map_type}_{method}_%%j.err
 #SBATCH --time={time}
 #SBATCH --mem=4G
 #SBATCH --cpus-per-task=4
 
 export OMP_NUM_THREADS=4
-apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python /data/NARSAD/scripts/group_searchlight.py --map_type {map_type} --method {method}
+apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python /app/group_searchlight.py --map_type {map_type} --method {method}
 """
 
     # Set time limit based on method
-    time_limit = '00:30:00' if method == 'flameo' else '01:00:00'  # 1 hour for Randomise
+    time_limit = '00:30:00' if method == 'flameo' else '02:00:00'  # 2 hours for Randomise
 
     # Generate Slurm script for each map type
     script_paths = []
@@ -66,7 +66,7 @@ def main():
     method = args.method
 
     # Create work_dir and slurm_dir
-    scrubbed_dir = '/gscratch/scrubbed/fanglab/xiaoqian'
+    scrubbed_dir = '/scrubbed_dir'
     project_name = 'NARSAD'
     work_dir = os.path.join(scrubbed_dir, project_name, 'work_flows', 'Lss_group_searchlight')
     slurm_dir = os.path.join(work_dir, method)
