@@ -202,81 +202,84 @@ def main():
     parser = argparse.ArgumentParser(description='Run group-level searchlight analysis for a single map type.')
     parser.add_argument('--map_type', required=True, help='Map type to process (e.g., within-FIXATION, between-FIXATION-CS-)')
     parser.add_argument('--method', choices=['flameo', 'randomise'], default='flameo', help='Analysis method: flameo or randomise')
-    parser.add_argument('--task', choices=['phase2', 'phase3'], required=True, help='Task to process: phase2 or phase3')
     args = parser.parse_args()
     map_type = args.map_type
     method = args.method
-    task = args.task
-    logger.info(f"Processing group-level analysis for map type: {map_type}, method: {method}, task: {task}")
+    logger.info(f"Processing group-level analysis for map type: {map_type}, method: {method}")
 
     # Paths
     root_dir = os.getenv('DATA_DIR', '/data')
     project_name = 'NARSAD'
     derivatives_dir = os.path.join(root_dir, project_name, 'MRI', 'derivatives')
     data_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'LSS', 'firstLevel', 'all_subjects', 'similarity', 'searchlight')
-    output_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'LSS', 'groupLevel', 'searchlight', method)
-    os.makedirs(output_dir, exist_ok=True)
-    logger.info(f"Output directory: {output_dir}")
 
-    # Collect subjects
-    subject_files = glob(os.path.join(data_dir, f'sub-*_task-{task}_within-FIXATION.nii.gz'))
-    subjects = sorted([os.path.basename(f).split('_')[0].replace('sub-', '') for f in subject_files])
-    logger.info(f"Found {len(subjects)} subjects: {subjects}")
+    # Process both tasks
+    tasks = ['phase2', 'phase3']
+    for task in tasks:
+        logger.info(f"Processing task: {task}")
+        output_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'LSS', 'groupLevel', 'searchlight', method, task)
+        os.makedirs(output_dir, exist_ok=True)
+        logger.info(f"Output directory for {task}: {output_dir}")
 
-    # Common mask
-    mask_file = os.path.join(
-        root_dir, project_name, 'MRI', 'derivatives', 'fmriprep',
-        f'sub-{subjects[0]}', 'ses-01', 'func',
-        f'sub-{subjects[0]}_ses-01_task-{task}_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
-    )
-    logger.info(f"Using mask: {mask_file}, exists: {os.path.exists(mask_file)}")
-    if not os.path.exists(mask_file):
-        logger.error(f"Mask file not found: {mask_file}")
-        return
+        # Collect subjects
+        subject_files = glob(os.path.join(data_dir, f'sub-*_task-{task}_within-FIXATION.nii.gz'))
+        subjects = sorted([os.path.basename(f).split('_')[0].replace('sub-', '') for f in subject_files])
+        logger.info(f"Found {len(subjects)} subjects for {task}: {subjects}")
 
-    # Collect cope files for the specified map type
-    cope_files = []
-    for sub in subjects:
-        cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}.nii.gz')
-        if os.path.exists(cope_file):
-            cope_files.append(cope_file)
-        else:
-            logger.warning(f"Cope file missing for sub-{sub}, {map_type}: {cope_file}")
-    if len(cope_files) < 2:
-        logger.error(f"Insufficient cope files for {map_type}: {len(cope_files)} found")
-        return
-    logger.info(f"Found {len(cope_files)} cope files for {map_type}")
+        # Common mask
+        mask_file = os.path.join(
+            root_dir, project_name, 'MRI', 'derivatives', 'fmriprep',
+            f'sub-{subjects[0]}', 'ses-01', 'func',
+            f'sub-{subjects[0]}_ses-01_task-{task}_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
+        )
+        logger.info(f"Using mask for {task}: {mask_file}, exists: {os.path.exists(mask_file)}")
+        if not os.path.exists(mask_file):
+            logger.error(f"Mask file not found for {task}: {mask_file}")
+            continue
 
-    # Create design matrix and contrast
-    design, con = create_design_matrix(len(cope_files))
-    design_file = os.path.join(output_dir, f'design_{map_type}.mat')
-    con_file = os.path.join(output_dir, f'contrast_{map_type}.con')
-    np.savetxt(design_file, design, fmt='%d')
-    np.savetxt(con_file, con, fmt='%d')
-    logger.info(f"Created design: {design_file}, contrast: {con_file}")
+        # Collect cope files for the specified map type
+        cope_files = []
+        for sub in subjects:
+            cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}.nii.gz')
+            if os.path.exists(cope_file):
+                cope_files.append(cope_file)
+            else:
+                logger.warning(f"Cope file missing for sub-{sub}, {map_type}, {task}: {cope_file}")
+        if len(cope_files) < 2:
+            logger.error(f"Insufficient cope files for {map_type}, {task}: {len(cope_files)} found")
+            continue
+        logger.info(f"Found {len(cope_files)} cope files for {map_type}, {task}")
 
-    # Select workflow
-    wf_name = f'wf_{method}_{map_type}'
-    if method == 'flameo':
-        wf = wf_flameo(output_dir=output_dir, name=wf_name)
-    else:  # randomise
-        wf = wf_randomise(output_dir=output_dir, name=wf_name)
+        # Create design matrix and contrast
+        design, con = create_design_matrix(len(cope_files))
+        design_file = os.path.join(output_dir, f'design_{map_type}.mat')
+        con_file = os.path.join(output_dir, f'contrast_{map_type}.con')
+        np.savetxt(design_file, design, fmt='%d')
+        np.savetxt(con_file, con, fmt='%d')
+        logger.info(f"Created design for {task}: {design_file}, contrast: {con_file}")
 
-    # Set inputs
-    wf.inputs.inputnode.cope_files = cope_files
-    wf.inputs.inputnode.mask_file = mask_file
-    wf.inputs.inputnode.design_file = design_file
-    wf.inputs.inputnode.con_file = con_file
-    if method == 'flameo':
-        wf.inputs.inputnode.result_dir = os.path.join(output_dir, map_type)
+        # Select workflow
+        wf_name = f'wf_{method}_{map_type}_{task}'
+        if method == 'flameo':
+            wf = wf_flameo(output_dir=output_dir, name=wf_name)
+        else:  # randomise
+            wf = wf_randomise(output_dir=output_dir, name=wf_name)
 
-    # Run workflow
-    try:
-        logger.info(f"Running {method} workflow for {map_type}")
-        wf.run()
-        logger.info(f"Completed group-level analysis for {map_type} with {method}")
-    except Exception as e:
-        logger.error(f"Error running {method} workflow for {map_type}: {e}")
+        # Set inputs
+        wf.inputs.inputnode.cope_files = cope_files
+        wf.inputs.inputnode.mask_file = mask_file
+        wf.inputs.inputnode.design_file = design_file
+        wf.inputs.inputnode.con_file = con_file
+        if method == 'flameo':
+            wf.inputs.inputnode.result_dir = os.path.join(output_dir, map_type)
+
+        # Run workflow
+        try:
+            logger.info(f"Running {method} workflow for {map_type}, {task}")
+            wf.run()
+            logger.info(f"Completed group-level analysis for {map_type}, {task} with {method}")
+        except Exception as e:
+            logger.error(f"Error running {method} workflow for {map_type}, {task}: {e}")
 
 if __name__ == '__main__':
     main()
