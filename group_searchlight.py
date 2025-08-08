@@ -141,7 +141,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
     # Randomise node
     randomise = Node(
         Randomise(
-            num_perm=10000,  # Restored to 10,000 permutations
+            num_perm=10000,
             tfce=True,
             vox_p_values=True
         ),
@@ -184,7 +184,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
         # Collect outputs
         (randomise, outputnode, [
             ('tstat_files', 'tstat_files'),
-            ('t_corrected_p_files', 'tfce_corr_p_files')
+            ('tfce_corr_p_files', 'tfce_corr_p_files')
         ]),
         (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
         # Send to DataSink
@@ -202,10 +202,12 @@ def main():
     parser = argparse.ArgumentParser(description='Run group-level searchlight analysis for a single map type.')
     parser.add_argument('--map_type', required=True, help='Map type to process (e.g., within-FIXATION, between-FIXATION-CS-)')
     parser.add_argument('--method', choices=['flameo', 'randomise'], default='flameo', help='Analysis method: flameo or randomise')
+    parser.add_argument('--task', choices=['phase2', 'phase3'], required=True, help='Task to process: phase2 or phase3')
     args = parser.parse_args()
     map_type = args.map_type
     method = args.method
-    logger.info(f"Processing group-level analysis for map type: {map_type}, method: {method}")
+    task = args.task
+    logger.info(f"Processing group-level analysis for map type: {map_type}, method: {method}, task: {task}")
 
     # Paths
     root_dir = os.getenv('DATA_DIR', '/data')
@@ -216,11 +218,8 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Output directory: {output_dir}")
 
-    # Task
-    task = 'phase3'
-
     # Collect subjects
-    subject_files = glob(os.path.join(data_dir, 'sub-*_task-phase3_within-FIXATION.nii.gz'))
+    subject_files = glob(os.path.join(data_dir, f'sub-*_task-{task}_within-FIXATION.nii.gz'))
     subjects = sorted([os.path.basename(f).split('_')[0].replace('sub-', '') for f in subject_files])
     logger.info(f"Found {len(subjects)} subjects: {subjects}")
 
@@ -228,7 +227,7 @@ def main():
     mask_file = os.path.join(
         root_dir, project_name, 'MRI', 'derivatives', 'fmriprep',
         f'sub-{subjects[0]}', 'ses-01', 'func',
-        f'sub-{subjects[0]}_ses-01_task-phase3_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
+        f'sub-{subjects[0]}_ses-01_task-{task}_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
     )
     logger.info(f"Using mask: {mask_file}, exists: {os.path.exists(mask_file)}")
     if not os.path.exists(mask_file):
