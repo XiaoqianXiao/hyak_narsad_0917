@@ -32,11 +32,11 @@ def generate_slurm_scripts(method, work_dir, slurm_dir):
 #SBATCH --cpus-per-task=4
 
 export OMP_NUM_THREADS=4
-apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python /app/group_searchlight.py --map_type {map_type} --method {method} --task {task}
+apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python3 /app/group_searchlight.py --map_type {map_type} --method {method} --task {task}
 """
 
     # Set time limit based on method
-    time_limit = '00:30:00' if method == 'flameo' else '01:00:00'  # 1 hour for Randomise
+    time_limit = '02:00:00' if method == 'flameo' else '04:00:00'  # 1 hour for Randomise
 
     # Generate Slurm script for each map type and task
     script_paths = []
