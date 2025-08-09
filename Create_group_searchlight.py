@@ -49,15 +49,6 @@ apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_
             script_paths.append(script_path)
             logger.info(f"Generated Slurm script: {script_path}")
 
-    # Generate master submission script
-    master_script = os.path.join(slurm_dir, f'submit_all_group_searchlight_{method}.sh')
-    with open(master_script, 'w') as f:
-        f.write("#!/bin/bash\n")
-        for script_path in script_paths:
-            f.write(f"sbatch {script_path}\n")
-    os.chmod(master_script, 0o755)
-    logger.info(f"Generated master submission script: {master_script}")
-
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Generate Slurm scripts for group-level searchlight analysis.')
