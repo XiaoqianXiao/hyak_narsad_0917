@@ -24,19 +24,21 @@ def generate_slurm_scripts(method, work_dir, slurm_dir):
 
     # Slurm template
     slurm_template = """#!/bin/bash
+#SBATCH --account=fang                                                                                            
+#SBATCH --partition=ckpt-all  
 #SBATCH --job-name=group_searchlight_{map_type}_{task}_{method}
 #SBATCH --output=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.out
 #SBATCH --error=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.err
 #SBATCH --time={time}
-#SBATCH --mem=4G
-#SBATCH --cpus-per-task=4
+#SBATCH --mem=20G
+#SBATCH --cpus-per-task=16
 
 export OMP_NUM_THREADS=4
 apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python3 /app/group_searchlight.py --map_type {map_type} --method {method} --task {task}
 """
 
     # Set time limit based on method
-    time_limit = '02:00:00' if method == 'flameo' else '04:00:00'  # 1 hour for Randomise
+    time_limit = '02:00:00' if method == 'flameo' else '4:00:00'  # 1 hour for Randomise
 
     # Generate Slurm script for each map type and task
     script_paths = []
