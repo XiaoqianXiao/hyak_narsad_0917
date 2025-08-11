@@ -27,8 +27,8 @@ def generate_slurm_scripts(method, work_dir, slurm_dir):
 #SBATCH --account=fang                                                                                            
 #SBATCH --partition=ckpt-all  
 #SBATCH --job-name=group_searchlight_{map_type}_{task}_{method}
-#SBATCH --output=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.out
-#SBATCH --error=/scrubbed_dir/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_group_searchlight/{task}_group_searchlight_{map_type}_{method}_%j.err
 #SBATCH --time={time}
 #SBATCH --mem=20G
 #SBATCH --cpus-per-task=16
