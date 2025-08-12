@@ -184,7 +184,7 @@ def wf_randomise(output_dir, name="wf_randomise"):
         # Collect outputs
         (randomise, outputnode, [
             ('tstat_files', 'tstat_files'),
-            ('tfce_corr_p_files', 'tfce_corr_p_files')
+            ('t_corrected_p_files', 'tfce_corr_p_files')
         ]),
         (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
         # Send to DataSink
