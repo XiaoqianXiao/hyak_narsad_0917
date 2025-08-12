@@ -33,8 +33,13 @@ def generate_slurm_scripts(method, work_dir, slurm_dir):
 #SBATCH --mem=20G
 #SBATCH --cpus-per-task=16
 
+module load apptainer
 export OMP_NUM_THREADS=4
-apptainer exec /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python3 /app/group_searchlight.py --map_type {map_type} --method {method} --task {task}
+apptainer exec \
+    -B /gscratch/fang:/data \
+    -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir \
+    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_searchlight.py:/app/group_searchlight.py \
+    /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif python3 /app/group_searchlight.py --map_type {map_type} --method {method} --task {task}
 """
 
     # Set time limit based on method
