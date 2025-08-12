@@ -226,11 +226,23 @@ def main():
         subjects = sorted([os.path.basename(f).split('_')[0].replace('sub-', '') for f in subject_files])
         logger.info(f"Found {len(subjects)} subjects for {task}: {subjects}")
 
-        # Common mask
+        # Common mask - find the correct session directory
+        subject_fmriprep_dir = os.path.join(root_dir, project_name, 'MRI', 'derivatives', 'fmriprep', f'sub-{subjects[0]}')
+        if not os.path.exists(subject_fmriprep_dir):
+            logger.error(f"Subject fmriprep directory not found: {subject_fmriprep_dir}")
+            continue
+            
+        # Find session directories
+        session_dirs = [d for d in os.listdir(subject_fmriprep_dir) if d.startswith('ses-')]
+        if not session_dirs:
+            logger.error(f"No session directories found in {subject_fmriprep_dir}")
+            continue
+            
+        # Use the first session found (you can modify this logic if needed)
+        session_name = session_dirs[0]
         mask_file = os.path.join(
-            root_dir, project_name, 'MRI', 'derivatives', 'fmriprep',
-            f'sub-{subjects[0]}', 'ses-01', 'func',
-            f'sub-{subjects[0]}_ses-01_task-{task}_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
+            subject_fmriprep_dir, session_name, 'func',
+            f'sub-{subjects[0]}_{session_name}_task-{task}_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz'
         )
         logger.info(f"Using mask for {task}: {mask_file}, exists: {os.path.exists(mask_file)}")
         if not os.path.exists(mask_file):
