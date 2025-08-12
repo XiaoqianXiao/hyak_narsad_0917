@@ -22,11 +22,37 @@ def setup_logging():
 
 logger = setup_logging()
 
-def create_design_matrix(n_subjects):
-    """Create a one-sample t-test design matrix."""
-    design = np.ones((n_subjects, 1))  # One column for mean
-    con = np.array([1])  # Contrast: mean != 0
+def create_design_matrix(subjects):
+    """Create a two-group t-test design matrix in VEST format.
+    
+    Args:
+        subjects: List of subject IDs where IDs starting with '1' are patients 
+                 and IDs starting with '2' are controls
+    """
+    n_subjects = len(subjects)
+    
+    # Create group indicator: 1 for patients (subjects starting with '1'), 0 for controls (subjects starting with '2')
+    group_indicator = np.array([1 if sub.startswith('1') else 0 for sub in subjects])
+    
+    # Create design matrix: [ones, group_indicator]
+    # First column: intercept (ones)
+    # Second column: group indicator (1=patient, 0=control)
+    design = np.column_stack([np.ones(n_subjects), group_indicator])
+    
+    # Create contrast: [0, 1] to test patients vs controls
+    # This tests if the group effect (patients - controls) is different from zero
+    con = np.array([0, 1])
+    
     return design, con
+
+def save_vest_file(data, filename):
+    """Save data in VEST format for FSL."""
+    with open(filename, 'w') as f:
+        f.write(f"/NumWaves\t{data.shape[1]}\n")
+        f.write(f"/NumPoints\t{data.shape[0]}\n")
+        f.write("/Matrix\n")
+        for row in data:
+            f.write("\t".join([str(val) for val in row]) + "\n")
 
 def wf_flameo(output_dir, name="wf_flameo"):
     """Workflow for group-level analysis with FLAMEO and GRF clustering."""
@@ -263,12 +289,17 @@ def main():
         logger.info(f"Found {len(cope_files)} cope files for {map_type}, {task}")
 
         # Create design matrix and contrast
-        design, con = create_design_matrix(len(cope_files))
+        design, con = create_design_matrix(subjects)
         design_file = os.path.join(output_dir, f'design_{map_type}.mat')
         con_file = os.path.join(output_dir, f'contrast_{map_type}.con')
-        np.savetxt(design_file, design, fmt='%d')
-        np.savetxt(con_file, con, fmt='%d')
+        save_vest_file(design, design_file)
+        save_vest_file(con.reshape(1, -1), con_file)  # Reshape contrast to 2D for VEST format
         logger.info(f"Created design for {task}: {design_file}, contrast: {con_file}")
+        
+        # Log group information
+        patients = [s for s in subjects if s.startswith('1')]
+        controls = [s for s in subjects if s.startswith('2')]
+        logger.info(f"Group analysis: {len(patients)} patients vs {len(controls)} controls")
 
         # Select workflow
         wf_name = f'wf_{method}_{map_type}_{task}'
