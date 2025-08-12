@@ -10,6 +10,9 @@ from nipype.interfaces.fsl.utils import Merge, ImageMaths
 import logging
 from glob import glob
 
+# Import workflows from group_level_workflows.py
+from group_level_workflows import wf_flameo, wf_randomise, create_flexible_design_matrix, save_vest_file
+
 # Configure logging
 def setup_logging():
     logger = logging.getLogger()
@@ -22,213 +25,7 @@ def setup_logging():
 
 logger = setup_logging()
 
-def create_design_matrix(subjects):
-    """Create a two-group design matrix in VEST format for testing group effects.
-    
-    Args:
-        subjects: List of subject IDs where IDs starting with '1' are patients 
-                 and IDs starting with '2' are controls
-    """
-    n_subjects = len(subjects)
-    
-    # Create group indicator: 1 for patients (subjects starting with '1'), 0 for controls (subjects starting with '2')
-    group_indicator = np.array([1 if sub.startswith('1') else 0 for sub in subjects])
-    
-    # Create design matrix: [ones, group_indicator]
-    # First column: intercept (ones)
-    # Second column: group indicator (1=patient, 0=control)
-    design = np.column_stack([np.ones(n_subjects), group_indicator])
-    
-    # Create contrasts for the 4 tests:
-    # con1: [0, 1] - patients > controls (patients - controls)
-    # con2: [0, -1] - patients < controls (controls - patients) 
-    # con3: [1, 1] - mean effect in patients (intercept + group effect)
-    # con4: [1, 0] - mean effect in controls (intercept only)
-    con1 = np.array([0, 1])   # patients > controls
-    con2 = np.array([0, -1])  # patients < controls
-    con3 = np.array([1, 1])   # mean effect in patients
-    con4 = np.array([1, 0])   # mean effect in controls
-    
-    return design, [con1, con2, con3, con4]
 
-def save_vest_file(data, filename):
-    """Save data in VEST format for FSL."""
-    with open(filename, 'w') as f:
-        f.write(f"/NumWaves\t{data.shape[1]}\n")
-        f.write(f"/NumPoints\t{data.shape[0]}\n")
-        f.write("/Matrix\n")
-        for row in data:
-            f.write("\t".join([str(val) for val in row]) + "\n")
-
-def wf_flameo(output_dir, name="wf_flameo"):
-    """Workflow for group-level analysis with FLAMEO and GRF clustering."""
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_files', 'var_cope_files', 'mask_file', 'design_file', 'con_file', 'result_dir'
-        ]),
-        name='inputnode'
-    )
-
-    # Merge cope files across subjects
-    merge_copes = Node(
-        Merge(dimension='t'),
-        name='merge_copes'
-    )
-
-    # FLAMEO node
-    flameo = Node(
-        FLAMEO(run_mode='flame1'),
-        name='flameo'
-    )
-
-    # Smoothness estimation node
-    smoothness = Node(
-        SmoothEstimate(),
-        name='smoothness'
-    )
-
-    # Clustering node with GRF
-    clustering = Node(
-        Cluster(
-            threshold=2.3,
-            connectivity=26,
-            out_threshold_file=True,
-            out_index_file=True,
-            out_localmax_txt_file=True,
-            pthreshold=0.05
-        ),
-        name='clustering'
-    )
-
-    # Output node
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks'
-        ]),
-        name='outputnode'
-    )
-
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
-
-    # Workflow connections
-    wf.connect([
-        # Merge copes
-        (inputnode, merge_copes, [('cope_files', 'in_files')]),
-        # FLAMEO inputs
-        (merge_copes, flameo, [('merged_file', 'cope_file')]),
-        (inputnode, flameo, [
-            ('var_cope_files', 'var_cope_file'),
-            ('mask_file', 'mask_file'),
-            ('design_file', 'design_mat'),
-            ('con_file', 't_con_file')
-        ]),
-        # Smoothness estimation
-        (flameo, smoothness, [('zstats', 'zstat_file')]),
-        (inputnode, smoothness, [('mask_file', 'mask_file')]),
-        # Clustering
-        (flameo, clustering, [('zstats', 'in_file')]),
-        (smoothness, clustering, [('volume', 'volume'), ('dlh', 'dlh')]),
-        # Collect outputs
-        (flameo, outputnode, [('zstats', 'zstats')]),
-        (clustering, outputnode, [
-            ('threshold_file', 'cluster_thresh'),
-            ('index_file', 'cluster_index'),
-            ('localmax_txt_file', 'cluster_peaks')
-        ]),
-        # Send to DataSink
-        (outputnode, datasink, [
-            ('zstats', 'stats.@zstats'),
-            ('cluster_thresh', 'cluster_results.@thresh'),
-            ('cluster_index', 'cluster_results.@index'),
-            ('cluster_peaks', 'cluster_results.@peaks')
-        ])
-    ])
-
-    return wf
-
-def wf_randomise(output_dir, name="wf_randomise"):
-    """Workflow for group-level analysis with Randomise + TFCE."""
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_files', 'mask_file', 'design_file', 'con_file'
-        ]),
-        name='inputnode'
-    )
-
-    # Merge cope files across subjects
-    merge_copes = Node(
-        Merge(dimension='t'),
-        name='merge_copes'
-    )
-
-    # Randomise node
-    randomise = Node(
-        Randomise(
-            num_perm=10000,
-            tfce=True,
-            vox_p_values=True
-        ),
-        name='randomise'
-    )
-
-    # Convert TFCE-corrected p’s to z-scores
-    fdr_ztop = Node(
-        ImageMaths(op_string='-ztop', suffix='_zstat'),
-        name='fdr_ztop'
-    )
-
-    # Output node
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'tstat_files', 'tfce_corr_p_files', 'z_thresh_files'
-        ]),
-        name='outputnode'
-    )
-
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
-
-    # Connections
-    wf.connect([
-        # Merge copes
-        (inputnode, merge_copes, [('cope_files', 'in_files')]),
-        # Randomise inputs
-        (merge_copes, randomise, [('merged_file', 'in_file')]),
-        (inputnode, randomise, [
-            ('mask_file', 'mask'),
-            ('design_file', 'design_mat'),
-            ('con_file', 'tcon')
-        ]),
-        # Convert p-values to z-scores
-        (randomise, fdr_ztop, [('t_corrected_p_files', 'in_file')]),
-        # Collect outputs
-        (randomise, outputnode, [
-            ('tstat_files', 'tstat_files'),
-            ('t_corrected_p_files', 'tfce_corr_p_files')
-        ]),
-        (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
-        # Send to DataSink
-        (outputnode, datasink, [
-            ('tstat_files', 'stats.@tstats'),
-            ('tfce_corr_p_files', 'stats.@tfce_p'),
-            ('z_thresh_files', 'stats.@zscores')
-        ])
-    ])
-
-    return wf
 
 def main():
     # Parse arguments
@@ -312,7 +109,7 @@ def main():
             logger.info(f"Found {len(var_cope_files)} var_cope files for FLAMEO")
 
         # Create design matrix and contrasts using only subjects with data
-        design, contrasts = create_design_matrix(subjects_with_data)
+        design, contrasts = create_flexible_design_matrix(subjects_with_data, group_coding='1/0', contrast_type='standard')
         design_file = os.path.join(output_dir, f'design_{map_type}.mat')
         con_file = os.path.join(output_dir, f'contrast_{map_type}.con')
         save_vest_file(design, design_file)
@@ -333,7 +130,7 @@ def main():
             logger.error(f"Insufficient subjects in one or both groups for {map_type}, {task}: {len(patients)} patients, {len(controls)} controls")
             continue
 
-        # Select workflow
+        # Select workflow from group_level_workflows.py
         wf_name = f'wf_{method}_{map_type}_{task}'
         if method == 'flameo':
             wf = wf_flameo(output_dir=output_dir, name=wf_name)

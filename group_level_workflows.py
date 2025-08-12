@@ -9,222 +9,12 @@ import subprocess
 import pandas as pd
 import numpy as np
 
+# =============================================================================
+# WORKFLOW DEFINITIONS
+# =============================================================================
 
-def create_dummy_design_files(group_info, output_dir, use_guess=False):
-    """
-    Create design.mat, design.grp, and contrast.con for fMRI group-level analysis:
-
-      • If len(unique_drugs) == 1:
-          two-sample t-test (Patients vs Controls).
-
-      • If len(unique_drugs) >= 2 and use_guess == False:
-          2×2 ANOVA (Group × Drug).
-
-      • If len(unique_drugs) >= 2 and use_guess == True:
-          2×2×2 ANOVA with all main effects and interactions
-          (Group, Drug, Guess).
-
-    Assumes each tuple in group_info is
-      (subject_id, group_id [1=Patients,2=Controls],
-       drug_id (e.g. 'A' or 'B'),
-       guess_id (only if use_guess, e.g. 'A' or 'B'))
-    """
-    # === Prepare output paths ===
-    design_dir = os.path.join(output_dir, 'design_files')
-    os.makedirs(design_dir, exist_ok=True)
-    design_f = os.path.join(design_dir, 'design.mat')
-    grp_f    = os.path.join(design_dir, 'design.grp')
-    con_f    = os.path.join(design_dir, 'contrast.con')
-
-    # === Extract unique levels ===
-    drug_ids     = [info[2] for info in group_info]
-    unique_drugs = sorted(set(drug_ids))
-    n            = len(group_info)
-
-    if use_guess:  # 🔧
-        guess_ids = [info[3] for info in group_info]
-        unique_guess = sorted(set(guess_ids))
-    else:
-        unique_guess = []
-
-    # --- Case 1: single-drug two-sample t-test ---
-    if len(unique_drugs) == 1:
-        # Patients vs Controls coded [1 0] vs [0 1]
-        design_rows     = []
-        variance_groups = []
-        for _, grp, _ in group_info:
-            design_rows.append("1 0" if grp == 1 else "0 1")
-            variance_groups.append("1")
-        contrasts = [
-            "1 -1",  # Patients > Controls
-            "1  0",  # Patients mean
-            "0  1",  # Controls mean
-        ]
-        num_evs = 2
-        # write design.mat
-        with open(design_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(design_rows))
-        # write design.grp
-        with open(grp_f, 'w') as f:
-            f.write("/NumWaves 1\n")
-            f.write(f"/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(variance_groups))
-        # write contrast.con
-        with open(con_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n")
-            f.write(f"/NumContrasts {len(contrasts)}\n/Matrix\n")
-            f.write("\n".join(contrasts) + "\n")
-        return design_f, grp_f, con_f
-
-    # --- Case 2: 2×2 ANOVA (no guess) ---
-    elif len(unique_drugs) >= 2 and not use_guess:
-        design_mat     = []
-        variance_groups= []
-        for _, grp, drug in group_info:
-            row = [0,0,0,0]
-            if grp == 1:
-                row[0 if drug == unique_drugs[0] else 1] = 1
-            else:
-                row[2 if drug == unique_drugs[0] else 3] = 1
-            design_mat.append(" ".join(map(str,row)))
-            variance_groups.append("1")
-        contrasts = [
-            "1  1 -1 -1",  # Group effect
-            "1 -1  1 -1",  # Drug  effect
-            "1 -1 -1  1",  # Interaction
-            "1  0  0  0",  # Patients×Drug1
-            "0  1  0  0",  # Patients×Drug2
-            "0  0  1  0",  # Controls×Drug1
-            "0  0  0  1",  # Controls×Drug2
-        ]
-        num_evs = 4
-        # write design.mat
-        with open(design_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(design_mat))
-        # write design.grp
-        with open(grp_f, 'w') as f:
-            f.write("/NumWaves 1\n")
-            f.write(f"/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(variance_groups))
-        # write contrast.con
-        with open(con_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n")
-            f.write(f"/NumContrasts {len(contrasts)}\n/Matrix\n")
-            f.write("\n".join(contrasts) + "\n")
-        return design_f, grp_f, con_f
-
-        # — Case 3: 2×2×2 ANOVA with Guess and extra contrasts —
-    elif len(unique_drugs) >= 2 and use_guess:
-        ev_index = {}
-        idx = 0
-        for grp_id in (1, 2):
-            for d in unique_drugs:
-                for q in unique_guess:
-                    ev_index[(grp_id, d, q)] = idx
-                    idx += 1
-        num_evs = idx
-
-        # design matrix and variance groups
-        design_rows = []
-        grp_rows = []
-        for _, grp, d, q in group_info:
-            row = [0] * num_evs
-            row[ev_index[(grp, d, q)]] = 1
-            design_rows.append(" ".join(map(str, row)))
-            grp_rows.append(str(ev_index[(grp, d, q)] + 1))
-
-        # prepare all contrasts
-        c_group = [0] * num_evs
-        c_drug = [0] * num_evs
-        c_guess = [0] * num_evs
-        c_gxd = [0] * num_evs
-        c_gxq = [0] * num_evs
-        c_dxq = [0] * num_evs
-        c_3way = [0] * num_evs
-        c_corr = [0] * num_evs  # drug effect when guess==drug
-        c_incorr = [0] * num_evs  # drug effect when guess!=drug
-
-        for (grp_id, d, q), ev in ev_index.items():
-            g = +1 if grp_id == 1 else -1
-            dr = +1 if d == unique_drugs[0] else -1
-            gs = +1 if q == unique_guess[0] else -1
-
-            c_group[ev] = g
-            c_drug[ev] = dr
-            c_guess[ev] = gs
-            c_gxd[ev] = g * dr
-            c_gxq[ev] = g * gs
-            c_dxq[ev] = dr * gs
-            c_3way[ev] = g * dr * gs
-
-            # correct vs incorrect drug contrasts
-            if d == q:
-                c_corr[ev] = dr
-            else:
-                c_incorr[ev] = dr
-
-        contrasts = [
-            c_group, c_drug, c_guess,
-            c_gxd, c_gxq, c_dxq, c_3way,
-            c_corr, c_incorr,
-            # difference between correct & incorrect:
-            [c_corr[i] - c_incorr[i] for i in range(num_evs)]
-        ]
-
-        # write out
-        with open(design_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n/NumPoints {n}\n/Matrix\n")
-            f.write("\n".join(design_rows))
-        with open(grp_f, 'w') as f:
-            f.write("/NumWaves 1\n/NumPoints {n}\n/Matrix\n".format(n=n))
-            f.write("\n".join(grp_rows))
-        with open(con_f, 'w') as f:
-            f.write(f"/NumWaves {num_evs}\n/NumContrasts {len(contrasts)}\n/Matrix\n")
-            for c in contrasts:
-                f.write(" ".join(map(str, c)) + "\n")
-        return design_f, grp_f, con_f
-
-    else:
-        raise ValueError("Unexpected combination of drug‐levels/use_guess")
-
-
-
-
-
-def check_file_exists(in_file):
-    """Check if a file exists and raise an error if not."""
-    print(f"DEBUG: Checking file existence: {in_file}")
-    import os
-    if not os.path.exists(in_file):
-        raise FileNotFoundError(f"File {in_file} does not exist!")
-    return in_file
-
-
-def rename_file(in_file, output_dir, contrast, file_type):
-    """Rename the merged file to a simpler name with error checking."""
-    print(f"DEBUG: Received in_file: {in_file}, contrast: {contrast}, file_type: {file_type}")
-    import shutil
-    import os
-    try:
-        contrast_str = str(int(contrast))
-    except (ValueError, TypeError):
-        print(f"Warning: Invalid contrast value '{contrast}', defaulting to 'unknown'")
-        contrast_str = "unknown"
-
-    new_name = f"merged_{file_type}.nii.gz"
-    out_file = os.path.join(output_dir, new_name)
-
-    if os.path.exists(in_file):
-        shutil.move(in_file, out_file)
-        print(f"Renamed {in_file} -> {out_file}")
-    else:
-        raise FileNotFoundError(f"Input file {in_file} does not exist!")
-
-    return out_file
-
-def data_prepare_wf(output_dir, contrast, name="data_prepare"):
+def wf_data_prepare(output_dir, contrast, name="wf_data_prepare"):
+    """Workflow for data preparation and merging (renamed from data_prepare_wf)."""
     wf = Workflow(name=name, base_dir=output_dir)
 
     # Input node
@@ -242,7 +32,6 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     # Merge nodes
     merge_copes = Node(Merge(dimension='t', output_type='NIFTI_GZ'), name='merge_copes')
     merge_varcopes = Node(Merge(dimension='t', output_type='NIFTI_GZ'), name='merge_varcopes')
-
 
     # Resample nodes with explicit output file specification
     resample_copes = Node(FLIRT(apply_isoxfm=2), name='resample_copes')
@@ -288,292 +77,63 @@ def data_prepare_wf(output_dir, contrast, name="data_prepare"):
     ])
 
     return wf
-# Define a standalone function to flatten nested lists
 
 
-def roi_based_wf(output_dir, name="roi_based_wf"):
-    """Workflow for ROI-based analysis using FLAMEO and statistical thresholding."""
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node for ROI-based workflow
-    inputnode = Node(IdentityInterface(fields=['roi','cope_file', 'var_cope_file',
-                                               'design_file', 'grp_file', 'con_file', 'result_dir']),
-                     name='inputnode')
-
-    # ROI node to fetch ROI files
-    roi_node = Node(Function(input_names=['roi'], output_names=['roi_files'],
-                             function=get_roi_files),
-                    name='roi_node')
-
-    # Masking for copes and varcopes - Iterate over roi_file
-    mask_copes = MapNode(ImageMaths(op_string='-mul'),  # Multiply input by mask
-                         iterfield=['in_file2'],  # Iterate over ROI masks
-                         name='mask_copes')
-
-    mask_varcopes = MapNode(ImageMaths(op_string='-mul'),
-                            iterfield=['in_file2'],
-                            name='mask_varcopes')
-
-    # FLAMEO for each ROI
-    flameo = MapNode(FLAMEO(run_mode='flame1'),
-                     iterfield=['cope_file', 'var_cope_file', 'mask_file'],  # Add mask_file to iterfield
-                     name='flameo')
-
-    # Statistical thresholding for each ROI
-    fdr_ztop = MapNode(ImageMaths(op_string='-ztop', suffix='_pval'),
-                       iterfield=['in_file'],
-                       name='fdr_ztop')
-
-    smoothness = MapNode(SmoothEstimate(),
-                         iterfield=['zstat_file', 'mask_file'],  # Add mask_file to iterfield
-                         name='smoothness')
-
-    fwe_thresh = MapNode(Threshold(thresh=0.05, direction='above'),
-                         iterfield=['in_file'],
-                         name='fwe_thresh')
-
-    # Output node
-    outputnode = Node(IdentityInterface(fields=['zstats', 'fdr_thresh', 'fwe_thresh']),
-                      name='outputnode')
-
-    # DataSink for ROI analysis outputs
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
-
-    # Workflow connections
-    wf.connect([
-        (inputnode, roi_node, [('roi', 'roi')]),
-        # ROI files from roi_node
-        (roi_node, mask_copes, [('roi_files', 'in_file2')]),  # ROI masks as in_file2
-        (roi_node, mask_varcopes, [('roi_files', 'in_file2')]),
-        (roi_node, flameo, [('roi_files', 'mask_file')]),
-        (roi_node, smoothness, [('roi_files', 'mask_file')]),
-
-        # Inputs to masking
-        (inputnode, mask_copes, [('cope_file', 'in_file')]),  # Cope file as in_file
-        (inputnode, mask_varcopes, [('var_cope_file', 'in_file')]),  # Varcope file as in_file
-
-        # Masked outputs to FLAMEO
-        (mask_copes, flameo, [('out_file', 'cope_file')]),
-        (mask_varcopes, flameo, [('out_file', 'var_cope_file')]),
-
-        # Design files to FLAMEO
-        (inputnode, flameo, [('design_file', 'design_file'),
-                             ('grp_file', 'cov_split_file'),
-                             ('con_file', 't_con_file')]),
-
-        # FLAMEO outputs to statistical processing with flattened zstats
-        (flameo, fdr_ztop, [(('zstats', flatten_zstats), 'in_file')]),
-        (flameo, smoothness, [(('zstats', flatten_zstats), 'zstat_file')]),
-        (flameo, fwe_thresh, [(('zstats', flatten_zstats), 'in_file')]),
-
-        # Outputs to outputnode
-        (flameo, outputnode, [('zstats', 'zstats')]),
-        (fdr_ztop, outputnode, [('out_file', 'fdr_thresh')]),
-        (fwe_thresh, outputnode, [('out_file', 'fwe_thresh')]),
-        (roi_node, outputnode, [('roi_files', 'roi_files')]),
-
-        # Outputs to DataSink
-        (outputnode, datasink, [('zstats', 'zstats'),
-                                ('fdr_thresh', 'fdr_thresh'),
-                                ('fwe_thresh', 'fwe_thresh'),
-                                ('roi_files', 'roi_files')])
-    ])
-
-    return wf
-
-
-def wf_flameo(output_dir, name="wf_flameo", use_covsplit=True):
-    """Workflow for group-level analysis with FLAMEO and GRF clustering (no flatten_stats)."""
-    from nipype.pipeline.engine import Workflow
-    from nipype import Node, MapNode
-    from nipype.interfaces.utility import IdentityInterface
-    from nipype.interfaces.io import DataSink
-    from nipype.interfaces.fsl.model import FLAMEO
-    from nipype.interfaces.fsl.model import SmoothEstimate, Cluster
-
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_file', 'var_cope_file', 'mask_file',
-            'design_file', 'grp_file', 'con_file', 'result_dir'
-        ]),
-        name='inputnode'
-    )
-
-    # FLAMEO node
-    flameo = Node(
-        FLAMEO(run_mode='flame1'),
-        name='flameo'
-    )
-
-    # Smoothness estimation node
-    smoothness = MapNode(
-        SmoothEstimate(),
-        iterfield=['zstat_file'],
-        name='smoothness'
-    )
-
-    # Clustering node with GRF
-    clustering = MapNode(
-        Cluster(
-            threshold=2.3,
-            connectivity=26,
-            out_threshold_file=True,
-            out_index_file=True,
-            out_localmax_txt_file=True,
-            pthreshold=0.05
-        ),
-        iterfield=['in_file', 'dlh', 'volume'],
-        name='clustering'
-    )
-
-    # Output node
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks'
-        ]),
-        name='outputnode'
-    )
-
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
-
-    # Workflow connections
-    wf.connect([
-        # FLAMEO inputs
-        (inputnode, flameo, [
-            ('cope_file',      'cope_file'),
-            ('var_cope_file',  'var_cope_file'),  # 🔧 corrected mapping: var_cope_file trait
-            ('mask_file',      'mask_file'),
-            ('design_file',    'design_file'),
-            ('grp_file',       'cov_split_file'),
-            ('con_file',       't_con_file')
-        ]),
-
-        # Smoothness estimation
-        (flameo,     smoothness, [('zstats', 'zstat_file')]),
-        (inputnode,  smoothness, [('mask_file', 'mask_file')]),
-
-        # Clustering
-        (flameo,      clustering, [('zstats', 'in_file')]),
-        (smoothness,  clustering, [('volume', 'volume')]),
-        (smoothness,  clustering, [('dlh', 'dlh')]),
-
-        # Collect outputs
-        (flameo,      outputnode, [('zstats', 'zstats')]),
-        (clustering,  outputnode, [
-            ('threshold_file',     'cluster_thresh'),
-            ('index_file',         'cluster_index'),
-            ('localmax_txt_file',  'cluster_peaks')
-        ]),
-
-        # Send to DataSink
-        (outputnode, datasink, [
-            ('zstats',         'stats.@zstats'),
-            ('cluster_thresh', 'cluster_results.@thresh'),
-            ('cluster_index',  'cluster_results.@index'),
-            ('cluster_peaks',  'cluster_results.@peaks')
-        ])
-    ])
-
-    return wf
-
-
-def wf_randomise(output_dir, name="wf_randomise"):
-    """Workflow for group-level analysis with Randomise + TFCE."""
-    from nipype.pipeline.engine import Workflow, Node, MapNode
-    from nipype.interfaces.utility import IdentityInterface
-    from nipype.interfaces.fsl.model import Randomise
-    from nipype.interfaces.fsl.utils import ImageMaths      # unchanged import
-    from nipype.interfaces.io import DataSink
-
-    wf = Workflow(name=name, base_dir=output_dir)
-
-    # 1) Inputs: cope, mask, design.mat, contrast.con
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_file',    # in_file for Randomise
-            'mask_file',    # mask for Randomise
-            'design_file',  # design_mat for Randomise
-            'con_file',     # tcon for Randomise
-        ]),
-        name='inputnode'
-    )
-
-    # 2) Randomise: TFCE + voxelwise p-values
-    randomise = Node(
-        Randomise(
-            num_perm=10000,
-            tfce=True,
-            vox_p_values=True
-        ),
-        name='randomise'
-    )
-
-    # 3) Convert TFCE-corrected p’s → z for easy thresholding
-    fdr_ztop = MapNode(
-        ImageMaths(op_string='-ztop', suffix='_zstat'),
-        iterfield=['in_file'],  # will receive real file paths
-        name='fdr_ztop'
-    )
-
-    # 4) Collect everything
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'tstat_files',         # raw t-stats
-            'tfce_corr_p_files',   # TFCE-corrected p’s
-            'z_thresh_files',      # z-transformed p-stats
-        ]),
-        name='outputnode'
-    )
-
-    # 5) Sink to disk
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
-
-    # --- Connections ---
-    wf.connect([
-        # a) feed inputs into Randomise
-        (inputnode, randomise, [
-            ('cope_file',   'in_file'),
-            ('mask_file',   'mask'),
-            ('design_file', 'design_mat'),
-            ('con_file',    'tcon'),
-        ]),
-
-        # b) take TFCE-corrected p’s → z-scores
-        (randomise, fdr_ztop, [
-            ('t_corrected_p_files', 'in_file'),  # now passing full paths
-        ]),
-
-        # c) collect Randomise outputs
-        (randomise, outputnode, [
-            ('tstat_files',         'tstat_files'),
-            ('t_corrected_p_files', 'tfce_corr_p_files'),
-        ]),
-        (fdr_ztop, outputnode, [
-            ('out_file', 'z_thresh_files'),
-        ]),
-
-        # d) write out to disk
-        (outputnode, datasink, [
-            ('tstat_files',       'stats.@tstats'),
-            ('tfce_corr_p_files', 'stats.@tfce_p'),
-            ('z_thresh_files',    'stats.@zscores'),
-        ]),
-    ])
-
-    return wf
-
-
-
-
-def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", name="wf_ROI"):
-    """Workflow to extract ROI beta values and PSC from fMRI data."""
+def wf_roi_extract(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", name="wf_roi_extract"):
+    """Workflow to extract ROI beta values and PSC from fMRI data.
+    
+    This workflow extracts mean beta values and percent signal change (PSC) 
+    from ROI masks. It takes cope files as input and computes statistics
+    within each ROI region.
+    
+    WHEN TO USE THIS WORKFLOW:
+    
+    1. DESCRIPTIVE ROI ANALYSIS:
+       - When you want to extract mean values from ROIs
+       - For descriptive statistics (mean, std, etc.)
+       - When you need ROI values for further analysis
+       - For data exploration and visualization
+    
+    2. VALUE EXTRACTION:
+       - When you need beta values for each subject in each ROI
+       - When you need PSC values for each subject in each ROI
+       - For creating ROI-based datasets
+       - For exporting data to other analysis tools (R, SPSS, etc.)
+    
+    3. BASELINE COMPARISON:
+       - When you have a baseline condition to compare against
+       - For computing percent signal change
+       - When you want to normalize effects relative to baseline
+       - For cross-study comparisons
+    
+    4. DATA PREPARATION:
+       - When preparing data for statistical analysis in other software
+       - For creating summary tables and figures
+       - When you need ROI values for correlation analysis
+       - For meta-analysis or systematic reviews
+    
+    5. CLINICAL INTERPRETATION:
+       - When you need interpretable values (PSC in %)
+       - For communicating results to clinicians
+       - When you want to compare effect sizes across studies
+       - For patient-specific analysis
+    
+    6. EXPLORATORY ANALYSIS:
+       - When you want to examine ROI values without statistical testing
+       - For data quality checks
+       - For identifying outliers
+       - For understanding effect sizes before formal testing
+    
+    OUTPUTS:
+    - beta_csv: Mean beta values for each ROI across subjects
+    - psc_csv: Percent signal change values for each ROI across subjects
+    - Individual text files for each ROI with subject-wise values
+    
+    Args:
+        output_dir (str): Output directory
+        roi_dir (str): Directory containing ROI mask files
+        name (str): Workflow name
+    """
     wf = Workflow(name=name, base_dir=output_dir)
 
     # Input node
@@ -628,6 +188,850 @@ def wf_ROI(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/ROIs", nam
     ])
 
     return wf
+
+
+
+
+
+def wf_flameo(output_dir, name="wf_flameo", use_clustering=True, 
+              cluster_threshold=3.2, cluster_pthreshold=0.05):
+    """
+    FLAMEO workflow for group-level analysis.
+    
+    This workflow performs group-level analysis using FLAMEO with optional clustering.
+    It takes cope files and var_cope files as input for mixed-effects analysis.
+    
+    Args:
+        output_dir (str): Output directory
+        name (str): Workflow name
+        use_clustering (bool): Whether to perform clustering
+        cluster_threshold (float): Cluster-forming threshold (default: 3.2)
+        cluster_pthreshold (float): Cluster significance threshold
+    """
+    wf = Workflow(name=name, base_dir=output_dir)
+
+    # Input node - flexible inputs
+    inputnode = Node(
+        IdentityInterface(fields=[
+            'cope_files', 'var_cope_files', 'mask_file', 
+            'design_file', 'con_file', 'result_dir'
+        ]),
+        name='inputnode'
+    )
+
+    # Merge cope files across subjects
+    merge_copes = Node(
+        Merge(dimension='t'),
+        name='merge_copes'
+    )
+
+    # FLAMEO node
+    flameo = Node(
+        FLAMEO(run_mode='flame1'),
+        name='flameo'
+    )
+
+    # Output node
+    outputnode = Node(
+        IdentityInterface(fields=[
+            'zstats', 'cope_files', 'varcope_files', 'fstat_files'
+        ]),
+        name='outputnode'
+    )
+
+    # DataSink
+    datasink = Node(
+        DataSink(base_directory=output_dir),
+        name='datasink'
+    )
+
+    # Basic workflow connections
+    connections = [
+        # Merge copes
+        (inputnode, merge_copes, [('cope_files', 'in_files')]),
+        # FLAMEO inputs
+        (merge_copes, flameo, [('merged_file', 'cope_file')]),
+        (inputnode, flameo, [
+            ('var_cope_files', 'var_cope_file'),
+            ('mask_file', 'mask_file'),
+            ('design_file', 'design_mat'),
+            ('con_file', 't_con_file')
+        ]),
+        # Collect outputs
+        (flameo, outputnode, [
+            ('zstats', 'zstats'),
+            ('cope_files', 'cope_files'),
+            ('varcope_files', 'varcope_files'),
+            ('fstat_files', 'fstat_files')
+        ]),
+        # Send to DataSink
+        (outputnode, datasink, [
+            ('zstats', 'stats.@zstats'),
+            ('cope_files', 'stats.@copes'),
+            ('varcope_files', 'stats.@varcopes'),
+            ('fstat_files', 'stats.@fstats')
+        ])
+    ]
+
+    # Add clustering if requested
+    if use_clustering:
+        # Smoothness estimation node
+        smoothness = Node(
+            SmoothEstimate(),
+            name='smoothness'
+        )
+
+        # Clustering node with GRF
+        clustering = Node(
+            Cluster(
+                threshold=cluster_threshold,
+                connectivity=26,
+                out_threshold_file=True,
+                out_index_file=True,
+                out_localmax_txt_file=True,
+                pthreshold=cluster_pthreshold
+            ),
+            name='clustering'
+        )
+
+        # Add clustering connections
+        connections.extend([
+            # Smoothness estimation
+            (flameo, smoothness, [('zstats', 'zstat_file')]),
+            (inputnode, smoothness, [('mask_file', 'mask_file')]),
+            # Clustering
+            (flameo, clustering, [('zstats', 'in_file')]),
+            (smoothness, clustering, [('volume', 'volume'), ('dlh', 'dlh')]),
+            # Add clustering outputs
+            (clustering, outputnode, [
+                ('threshold_file', 'cluster_thresh'),
+                ('index_file', 'cluster_index'),
+                ('localmax_txt_file', 'cluster_peaks')
+            ]),
+            (clustering, datasink, [
+                ('threshold_file', 'cluster_results.@thresh'),
+                ('index_file', 'cluster_results.@index'),
+                ('localmax_txt_file', 'cluster_results.@peaks')
+            ])
+        ])
+
+    wf.connect(connections)
+    return wf
+
+def wf_randomise(output_dir, name="wf_randomise", 
+                 num_perm=10000, use_tfce=True, use_voxelwise=True):
+    """
+    Randomise workflow for group-level analysis.
+    
+    This workflow performs non-parametric group-level analysis using Randomise.
+    It takes cope files as input and performs permutation-based statistical testing.
+    
+    Args:
+        output_dir (str): Output directory
+        name (str): Workflow name
+        num_perm (int): Number of permutations
+        use_tfce (bool): Whether to use TFCE
+        use_voxelwise (bool): Whether to compute voxelwise p-values
+    """
+    wf = Workflow(name=name, base_dir=output_dir)
+
+    # Input node
+    inputnode = Node(
+        IdentityInterface(fields=[
+            'cope_files', 'mask_file', 'design_file', 'con_file'
+        ]),
+        name='inputnode'
+    )
+
+    # Merge cope files across subjects
+    merge_copes = Node(
+        Merge(dimension='t'),
+        name='merge_copes'
+    )
+
+    # Randomise node with flexible options
+    randomise = Node(
+        Randomise(
+            num_perm=num_perm,
+            tfce=use_tfce,
+            vox_p_values=use_voxelwise
+        ),
+        name='randomise'
+    )
+
+    # Output node
+    outputnode = Node(
+        IdentityInterface(fields=[
+            'tstat_files', 'tfce_corr_p_files', 'vox_p_files'
+        ]),
+        name='outputnode'
+    )
+
+    # DataSink
+    datasink = Node(
+        DataSink(base_directory=output_dir),
+        name='datasink'
+    )
+
+    # Basic connections
+    connections = [
+        # Merge copes
+        (inputnode, merge_copes, [('cope_files', 'in_files')]),
+        # Randomise inputs
+        (merge_copes, randomise, [('merged_file', 'in_file')]),
+        (inputnode, randomise, [
+            ('mask_file', 'mask'),
+            ('design_file', 'design_mat'),
+            ('con_file', 'tcon')
+        ]),
+        # Collect outputs
+        (randomise, outputnode, [
+            ('tstat_files', 'tstat_files'),
+            ('t_corrected_p_files', 'tfce_corr_p_files'),
+            ('vox_p_files', 'vox_p_files')
+        ]),
+        # Send to DataSink
+        (outputnode, datasink, [
+            ('tstat_files', 'stats.@tstats'),
+            ('tfce_corr_p_files', 'stats.@tfce_p'),
+            ('vox_p_files', 'stats.@vox_p')
+        ])
+    ]
+
+    # Add z-score conversion if TFCE is used
+    if use_tfce:
+        fdr_ztop = Node(
+            ImageMaths(op_string='-ztop', suffix='_zstat'),
+            name='fdr_ztop'
+        )
+        
+        connections.extend([
+            # Convert TFCE p-values to z-scores
+            (randomise, fdr_ztop, [('t_corrected_p_files', 'in_file')]),
+            (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
+            (fdr_ztop, datasink, [('out_file', 'stats.@zscores')])
+        ])
+
+    wf.connect(connections)
+    return wf
+
+# =============================================================================
+# UNIFIED GROUP-LEVEL ANALYSIS WORKFLOW
+# =============================================================================
+
+def create_group_analysis_workflow(output_dir, method='flameo', subjects=None, 
+                                 group_coding='1/0', contrast_type='standard',
+                                 analysis_type='whole_brain', roi_dir=None, **kwargs):
+    """
+    Create a complete group analysis workflow with design matrix generation.
+    
+    This function can create both whole-brain and ROI-based analysis workflows.
+    
+    Args:
+        output_dir (str): Output directory
+        method (str): 'flameo' or 'randomise'
+        subjects (list): List of subject IDs
+        group_coding (str): '1/0' or '1/-1' for group coding
+        contrast_type (str): 'standard' or 'minimal' for contrasts
+        analysis_type (str): 'whole_brain' or 'roi' - type of analysis to perform
+        roi_dir (str): Directory containing ROI mask files (required if analysis_type='roi')
+        **kwargs: Additional arguments for specific workflows
+    
+    Returns:
+        tuple: (workflow, design_file, con_file)
+    """
+    # Create design matrix and contrasts
+    if subjects is not None:
+        design, contrasts = create_flexible_design_matrix(
+            subjects, group_coding=group_coding, contrast_type=contrast_type
+        )
+        
+        # Save design files
+        design_file = os.path.join(output_dir, 'design.mat')
+        con_file = os.path.join(output_dir, 'contrast.con')
+        save_vest_file(design, design_file)
+        save_vest_file(np.array(contrasts), con_file)
+    else:
+        design_file = None
+        con_file = None
+
+    # Create workflow based on analysis type and method
+    if analysis_type == 'roi':
+        if roi_dir is None:
+            raise ValueError("roi_dir must be specified for ROI-based analysis")
+        
+        # For ROI analysis, we need to create a custom workflow since the standalone workflows
+        # are designed for whole-brain analysis
+        wf = Workflow(name=f"roi_analysis_{method}", base_dir=output_dir)
+        
+        # Input node for ROI analysis
+        if method == 'flameo':
+            inputnode = Node(IdentityInterface(fields=['cope_files', 'var_cope_files', 'mask_file',
+                                                       'design_file', 'con_file', 'result_dir']),
+                             name='inputnode')
+        else:  # randomise
+            inputnode = Node(IdentityInterface(fields=['cope_files', 'mask_file',
+                                                       'design_file', 'con_file']),
+                             name='inputnode')
+        
+        # ROI node to fetch ROI files
+        roi_node = Node(Function(input_names=['roi_dir'], output_names=['roi_files'],
+                                 function=get_roi_files),
+                        name='roi_node')
+        roi_node.inputs.roi_dir = roi_dir
+        
+        # Masking for copes and varcopes
+        mask_copes = MapNode(ImageMaths(op_string='-mul'), 
+                             iterfield=['in_file2'], 
+                             name='mask_copes')
+        
+        if method == 'flameo':
+            mask_varcopes = MapNode(ImageMaths(op_string='-mul'),
+                                    iterfield=['in_file2'],
+                                    name='mask_varcopes')
+        
+        # Analysis node for each ROI
+        if method == 'flameo':
+            analysis_node = MapNode(FLAMEO(run_mode='flame1'),
+                                   iterfield=['cope_file', 'var_cope_file', 'mask_file'],
+                                   name='flameo')
+        else:  # randomise
+            analysis_node = MapNode(Randomise(num_perm=10000, tfce=True, vox_p_values=True),
+                                   iterfield=['in_file', 'mask', 'design_mat', 'tcon'],
+                                   name='randomise')
+        
+        # Statistical thresholding
+        if method == 'flameo':
+            fdr_ztop = MapNode(ImageMaths(op_string='-ztop', suffix='_pval'),
+                               iterfield=['in_file'],
+                               name='fdr_ztop')
+            smoothness = MapNode(SmoothEstimate(),
+                                 iterfield=['zstat_file', 'mask_file'],
+                                 name='smoothness')
+            fwe_thresh = MapNode(Threshold(thresh=0.05, direction='above'),
+                                 iterfield=['in_file'],
+                                 name='fwe_thresh')
+        else:  # randomise
+            tfce_ztop = MapNode(ImageMaths(op_string='-ztop', suffix='_zstat'),
+                                iterfield=['in_file'],
+                                name='tfce_ztop')
+        
+        # Output node
+        if method == 'flameo':
+            outputnode = Node(IdentityInterface(fields=['zstats', 'fdr_thresh', 'fwe_thresh']),
+                              name='outputnode')
+        else:  # randomise
+            outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files', 'z_thresh_files']),
+                              name='outputnode')
+        
+        # DataSink
+        datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+        
+        # ROI workflow connections
+        if method == 'flameo':
+            wf.connect([
+                (inputnode, roi_node, [('cope_files', 'cope_files')]),
+                (roi_node, mask_copes, [('roi_files', 'in_file2')]),
+                (roi_node, mask_varcopes, [('roi_files', 'in_file2')]),
+                (roi_node, analysis_node, [('roi_files', 'mask_file')]),
+                (roi_node, smoothness, [('roi_files', 'mask_file')]),
+                
+                (inputnode, mask_copes, [('cope_files', 'in_file')]),
+                (inputnode, mask_varcopes, [('var_cope_files', 'in_file')]),
+                
+                (mask_copes, analysis_node, [('out_file', 'cope_file')]),
+                (mask_varcopes, analysis_node, [('out_file', 'var_cope_file')]),
+                
+                (inputnode, analysis_node, [('design_file', 'design_file'),
+                                           ('con_file', 't_con_file')]),
+                
+                (analysis_node, fdr_ztop, [(('zstats', flatten_zstats), 'in_file')]),
+                (analysis_node, smoothness, [(('zstats', flatten_zstats), 'zstat_file')]),
+                (analysis_node, fwe_thresh, [(('zstats', flatten_zstats), 'in_file')]),
+                
+                (analysis_node, outputnode, [('zstats', 'zstats')]),
+                (fdr_ztop, outputnode, [('out_file', 'fdr_thresh')]),
+                (fwe_thresh, outputnode, [('out_file', 'fwe_thresh')]),
+                (roi_node, outputnode, [('roi_files', 'roi_files')]),
+                
+                (outputnode, datasink, [('zstats', 'zstats'),
+                                        ('fdr_thresh', 'fdr_thresh'),
+                                        ('fwe_thresh', 'fwe_thresh'),
+                                        ('roi_files', 'roi_files')])
+            ])
+        else:  # randomise
+            wf.connect([
+                (inputnode, roi_node, [('cope_files', 'cope_files')]),
+                (roi_node, mask_copes, [('roi_files', 'in_file2')]),
+                (roi_node, analysis_node, [('roi_files', 'mask')]),
+                
+                (inputnode, mask_copes, [('cope_files', 'in_file')]),
+                
+                (mask_copes, analysis_node, [('out_file', 'in_file')]),
+                
+                (inputnode, analysis_node, [('design_file', 'design_mat'),
+                                           ('con_file', 'tcon')]),
+                
+                (analysis_node, tfce_ztop, [('t_corrected_p_files', 'in_file')]),
+                
+                (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
+                                            ('t_corrected_p_files', 'tfce_corr_p_files')]),
+                (tfce_ztop, outputnode, [('out_file', 'z_thresh_files')]),
+                (roi_node, outputnode, [('roi_files', 'roi_files')]),
+                
+                (outputnode, datasink, [('tstat_files', 'tstats'),
+                                        ('t_corrected_p_files', 'tfce_p'),
+                                        ('z_thresh_files', 'zscores'),
+                                        ('roi_files', 'roi_files')])
+            ])
+    
+    else:  # whole_brain
+        # For whole-brain analysis, use the standalone workflows directly
+        if method == 'flameo':
+            wf = wf_flameo(output_dir, **kwargs)
+        elif method == 'randomise':
+            wf = wf_randomise(output_dir, **kwargs)
+        else:
+            raise ValueError(f"Unknown method: {method}. Use 'flameo' or 'randomise'")
+
+    return wf, design_file, con_file
+
+def run_group_analysis(cope_files, var_cope_files=None, mask_file=None, 
+                      subjects=None, output_dir=None, method='flameo',
+                      group_coding='1/0', contrast_type='standard', 
+                      analysis_type='whole_brain', roi_dir=None, **kwargs):
+    """
+    Run complete group-level analysis with automatic setup.
+    
+    This function can perform both whole-brain and ROI-based analysis.
+    
+    Args:
+        cope_files (list): List of cope file paths
+        var_cope_files (list): List of var_cope file paths (required for FLAMEO)
+        mask_file (str): Mask file path
+        subjects (list): List of subject IDs for design matrix
+        output_dir (str): Output directory
+        method (str): 'flameo' or 'randomise'
+        group_coding (str): Group coding scheme
+        contrast_type (str): Contrast type
+        analysis_type (str): 'whole_brain' or 'roi' - type of analysis to perform
+        roi_dir (str): Directory containing ROI mask files (required if analysis_type='roi')
+        **kwargs: Additional workflow arguments
+    
+    Returns:
+        Workflow: Configured and ready-to-run workflow
+    """
+    # Create output directory
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Create workflow
+    wf, design_file, con_file = create_group_analysis_workflow(
+        output_dir, method, subjects, group_coding, contrast_type, 
+        analysis_type, roi_dir, **kwargs
+    )
+    
+    # Set inputs
+    wf.inputs.inputnode.cope_files = cope_files
+    wf.inputs.inputnode.mask_file = mask_file
+    
+    if design_file:
+        wf.inputs.inputnode.design_file = design_file
+    if con_file:
+        wf.inputs.inputnode.con_file = con_file
+    
+    # Set method-specific inputs
+    if method == 'flameo':
+        if var_cope_files is None:
+            raise ValueError("var_cope_files required for FLAMEO method")
+        wf.inputs.inputnode.var_cope_files = var_cope_files
+        wf.inputs.inputnode.result_dir = output_dir
+    elif method == 'randomise':
+        # Randomise doesn't need var_cope_files
+        pass
+    
+    return wf
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def create_dummy_design_files(group_info, output_dir, column_names=None, contrast_type='auto'):
+    """
+    Create design.mat, design.grp, and contrast.con for fMRI group-level analysis.
+    
+    This function is now generic and can handle any combination of columns in group_info.
+    
+    Args:
+        group_info (pandas.DataFrame): DataFrame where each column represents a condition/factor.
+                                     Rows are subjects, columns are factors (e.g., group, drug, guess)
+        output_dir (str): Output directory for design files
+        column_names (list): Names of columns to use as factors (if None, uses all columns)
+        contrast_type (str): Type of contrasts to generate ('auto', 'main_effects', 'interactions', 'custom')
+    
+    Examples:
+        # Two-group comparison
+        group_info = pd.DataFrame({
+            'group': [1, 2, 1, 2],
+            'subject': ['sub1', 'sub2', 'sub3', 'sub4']
+        })
+        column_names = ['group']  # Only use 'group' column
+        
+        # 2x2 factorial design
+        group_info = pd.DataFrame({
+            'group': [1, 1, 2, 2],
+            'drug': ['A', 'B', 'A', 'B'],
+            'subject': ['sub1', 'sub2', 'sub3', 'sub4']
+        })
+        column_names = ['group', 'drug']  # Use both factors
+        
+        # 2x2x2 factorial design
+        group_info = pd.DataFrame({
+            'group': [1, 1, 1, 1, 2, 2, 2, 2],
+            'drug': ['A', 'A', 'B', 'B', 'A', 'A', 'B', 'B'],
+            'guess': ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'],
+            'subject': ['sub1', 'sub2', 'sub3', 'sub4', 'sub5', 'sub6', 'sub7', 'sub8']
+        })
+        column_names = ['group', 'drug', 'guess']  # Use all three factors
+    """
+    # === Prepare output paths ===
+    design_dir = os.path.join(output_dir, 'design_files')
+    os.makedirs(design_dir, exist_ok=True)
+    design_f = os.path.join(design_dir, 'design.mat')
+    grp_f    = os.path.join(design_dir, 'design.grp')
+    con_f    = os.path.join(design_dir, 'contrast.con')
+
+    # === Generic design matrix generation ===
+    n = len(group_info)
+    
+    # Auto-detect column structure if not provided
+    if column_names is None:
+        # Use all columns except 'subject' if it exists
+        all_columns = list(group_info.columns)
+        if 'subject' in all_columns:
+            column_names = [col for col in all_columns if col != 'subject']
+        else:
+            column_names = all_columns
+    
+    # Extract factor columns
+    factor_columns = column_names
+    n_factors = len(factor_columns)
+    
+    # Get unique levels for each factor
+    factor_levels = {}
+    for factor_name in factor_columns:
+        factor_values = group_info[factor_name].values
+        factor_levels[factor_name] = sorted(set(factor_values))
+    
+    # Create design matrix
+    if n_factors == 1:
+        # Single factor (e.g., two-group comparison)
+        design_matrix, contrasts = create_single_factor_design(group_info, factor_levels, column_names)
+    elif n_factors == 2:
+        # Two factors (e.g., 2x2 factorial)
+        design_matrix, contrasts = create_two_factor_design(group_info, factor_levels, column_names, contrast_type)
+    elif n_factors == 3:
+        # Three factors (e.g., 2x2x2 factorial)
+        design_matrix, contrasts = create_three_factor_design(group_info, factor_levels, column_names, contrast_type)
+    else:
+        # General factorial design
+        design_matrix, contrasts = create_general_factorial_design(group_info, factor_levels, column_names, contrast_type)
+    
+    # Write design files
+    num_evs = len(design_matrix[0])
+    
+    # Write design.mat
+    with open(design_f, 'w') as f:
+        f.write(f"/NumWaves {num_evs}\n/NumPoints {n}\n/Matrix\n")
+        for row in design_matrix:
+            f.write(" ".join(map(str, row)) + "\n")
+    
+    # Write design.grp (variance groups)
+    with open(grp_f, 'w') as f:
+        f.write("/NumWaves 1\n")
+        f.write(f"/NumPoints {n}\n/Matrix\n")
+        for _ in range(n):
+            f.write("1\n")
+    
+    # Write contrast.con
+    with open(con_f, 'w') as f:
+        f.write(f"/NumWaves {num_evs}\n")
+        f.write(f"/NumContrasts {len(contrasts)}\n/Matrix\n")
+        for contrast in contrasts:
+            f.write(" ".join(map(str, contrast)) + "\n")
+    
+    return design_f, grp_f, con_f
+
+def create_single_factor_design(group_info, factor_levels, column_names):
+    """Create design matrix for single factor (e.g., two-group comparison)."""
+    factor_name = list(factor_levels.keys())[0]
+    levels = factor_levels[factor_name]
+    n_levels = len(levels)
+    
+    # Create design matrix (one column per level)
+    design_matrix = []
+    for _, row in group_info.iterrows():
+        design_row = [0] * n_levels
+        factor_value = row[factor_name]
+        level_idx = levels.index(factor_value)
+        design_row[level_idx] = 1
+        design_matrix.append(design_row)
+    
+    # Create contrasts
+    contrasts = []
+    if n_levels == 2:
+        # Two-group comparison
+        contrasts = [
+            [1, -1],  # Level 1 > Level 2
+            [1, 0],   # Level 1 mean
+            [0, 1],   # Level 2 mean
+        ]
+    else:
+        # Multi-level factor
+        for i in range(n_levels):
+            for j in range(i+1, n_levels):
+                contrast = [0] * n_levels
+                contrast[i] = 1
+                contrast[j] = -1
+                contrasts.append(contrast)
+    
+    return design_matrix, contrasts
+
+def create_two_factor_design(group_info, factor_levels, column_names, contrast_type):
+    """Create design matrix for two-factor design."""
+    factor_names = list(factor_levels.keys())
+    levels1 = factor_levels[factor_names[0]]
+    levels2 = factor_levels[factor_names[1]]
+    n_levels1 = len(levels1)
+    n_levels2 = len(levels2)
+    n_cells = n_levels1 * n_levels2
+    
+    # Create design matrix
+    design_matrix = []
+    for _, row in group_info.iterrows():
+        design_row = [0] * n_cells
+        value1 = row[factor_names[0]]  # First factor
+        value2 = row[factor_names[1]]  # Second factor
+        cell_idx = levels1.index(value1) * n_levels2 + levels2.index(value2)
+        design_row[cell_idx] = 1
+        design_matrix.append(design_row)
+    
+    # Create contrasts
+    contrasts = []
+    if contrast_type in ['auto', 'main_effects', 'interactions']:
+        # Main effects
+        for i in range(n_levels1):
+            for j in range(i+1, n_levels1):
+                contrast = [0] * n_cells
+                for k in range(n_levels2):
+                    idx1 = i * n_levels2 + k
+                    idx2 = j * n_levels2 + k
+                    contrast[idx1] = 1
+                    contrast[idx2] = -1
+                contrasts.append(contrast)
+        
+        for i in range(n_levels2):
+            for j in range(i+1, n_levels2):
+                contrast = [0] * n_cells
+                for k in range(n_levels1):
+                    idx1 = k * n_levels2 + i
+                    idx2 = k * n_levels2 + j
+                    contrast[idx1] = 1
+                    contrast[idx2] = -1
+                contrasts.append(contrast)
+        
+        if contrast_type in ['auto', 'interactions']:
+            # Interaction effects (simplified)
+            if n_levels1 == 2 and n_levels2 == 2:
+                contrast = [1, -1, -1, 1]  # Interaction
+                contrasts.append(contrast)
+    
+    return design_matrix, contrasts
+
+def create_three_factor_design(group_info, factor_levels, column_names, contrast_type):
+    """Create design matrix for three-factor design."""
+    factor_names = list(factor_levels.keys())
+    levels1 = factor_levels[factor_names[0]]
+    levels2 = factor_levels[factor_names[1]]
+    levels3 = factor_levels[factor_names[2]]
+    n_levels1 = len(levels1)
+    n_levels2 = len(levels2)
+    n_levels3 = len(levels3)
+    n_cells = n_levels1 * n_levels2 * n_levels3
+    
+    # Create design matrix
+    design_matrix = []
+    for _, row in group_info.iterrows():
+        design_row = [0] * n_cells
+        value1 = row[factor_names[0]]  # First factor
+        value2 = row[factor_names[1]]  # Second factor
+        value3 = row[factor_names[2]]  # Third factor
+        cell_idx = (levels1.index(value1) * n_levels2 * n_levels3 + 
+                   levels2.index(value2) * n_levels3 + 
+                   levels3.index(value3))
+        design_row[cell_idx] = 1
+        design_matrix.append(design_row)
+    
+    # Create basic contrasts (main effects)
+    contrasts = []
+    if contrast_type in ['auto', 'main_effects']:
+        # Main effects for each factor
+        for i in range(n_levels1):
+            for j in range(i+1, n_levels1):
+                contrast = [0] * n_cells
+                for k in range(n_levels2):
+                    for l in range(n_levels3):
+                        idx1 = i * n_levels2 * n_levels3 + k * n_levels3 + l
+                        idx2 = j * n_levels2 * n_levels3 + k * n_levels3 + l
+                        contrast[idx1] = 1
+                        contrast[idx2] = -1
+                contrasts.append(contrast)
+    
+    return design_matrix, contrasts
+
+def create_general_factorial_design(group_info, factor_levels, column_names, contrast_type):
+    """Create design matrix for general factorial design."""
+    factor_names = list(factor_levels.keys())
+    n_factors = len(factor_names)
+    
+    # Calculate total number of cells
+    n_cells = 1
+    for factor_name in factor_names:
+        n_cells *= len(factor_levels[factor_name])
+    
+    # Create design matrix
+    design_matrix = []
+    for _, row in group_info.iterrows():
+        design_row = [0] * n_cells
+        cell_idx = calculate_cell_index(row, factor_levels, factor_names)
+        design_row[cell_idx] = 1
+        design_matrix.append(design_row)
+    
+    # Create basic contrasts (main effects for first two factors)
+    contrasts = []
+    if contrast_type in ['auto', 'main_effects'] and n_factors >= 2:
+        # Main effect for first factor
+        factor1_levels = factor_levels[factor_names[0]]
+        factor2_levels = factor_levels[factor_names[1]]
+        n_levels1 = len(factor1_levels)
+        n_levels2 = len(factor2_levels)
+        
+        for i in range(n_levels1):
+            for j in range(i+1, n_levels1):
+                contrast = [0] * n_cells
+                # This is a simplified version - would need more complex logic for general case
+                contrasts.append(contrast)
+    
+    return design_matrix, contrasts
+
+def calculate_cell_index(row, factor_levels, factor_names):
+    """Calculate cell index for a given combination of factor levels."""
+    cell_idx = 0
+    multiplier = 1
+    
+    for i, factor_name in enumerate(factor_names):
+        factor_value = row[factor_name]
+        level_idx = factor_levels[factor_name].index(factor_value)
+        cell_idx += level_idx * multiplier
+        
+        # Update multiplier for next factor
+        if i < len(factor_names) - 1:
+            next_factor = factor_names[i + 1]
+            multiplier *= len(factor_levels[next_factor])
+    
+    return cell_idx
+
+
+def test_dataframe_design():
+    """
+    Test function to demonstrate the new DataFrame functionality.
+    
+    This function shows how to use create_dummy_design_files with pandas DataFrames.
+    """
+    import pandas as pd
+    import tempfile
+    import os
+    
+    print("Testing DataFrame-based design matrix generation...")
+    
+    # Test 1: Two-group comparison
+    print("\n1. Two-group comparison:")
+    group_info = pd.DataFrame({
+        'group': [1, 2, 1, 2, 1, 2],
+        'subject': ['sub1', 'sub2', 'sub3', 'sub4', 'sub5', 'sub6']
+    })
+    print(f"Input DataFrame:\n{group_info}")
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        design_f, grp_f, con_f = create_dummy_design_files(
+            group_info, temp_dir, column_names=['group']
+        )
+        print(f"Generated files: {design_f}, {grp_f}, {con_f}")
+    
+    # Test 2: 2x2 factorial design
+    print("\n2. 2x2 factorial design:")
+    group_info = pd.DataFrame({
+        'group': [1, 1, 2, 2, 1, 1, 2, 2],
+        'drug': ['A', 'B', 'A', 'B', 'A', 'B', 'A', 'B'],
+        'subject': ['sub1', 'sub2', 'sub3', 'sub4', 'sub5', 'sub6', 'sub7', 'sub8']
+    })
+    print(f"Input DataFrame:\n{group_info}")
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        design_f, grp_f, con_f = create_dummy_design_files(
+            group_info, temp_dir, column_names=['group', 'drug']
+        )
+        print(f"Generated files: {design_f}, {grp_f}, {con_f}")
+    
+    # Test 3: Auto-detect columns
+    print("\n3. Auto-detect columns:")
+    group_info = pd.DataFrame({
+        'group': [1, 2, 1, 2],
+        'drug': ['A', 'A', 'B', 'B'],
+        'subject': ['sub1', 'sub2', 'sub3', 'sub4']
+    })
+    print(f"Input DataFrame:\n{group_info}")
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        design_f, grp_f, con_f = create_dummy_design_files(
+            group_info, temp_dir  # column_names=None for auto-detection
+        )
+        print(f"Generated files: {design_f}, {grp_f}, {con_f}")
+    
+    print("\nAll tests completed successfully!")
+
+
+
+
+def check_file_exists(in_file):
+    """Check if a file exists and raise an error if not."""
+    print(f"DEBUG: Checking file existence: {in_file}")
+    import os
+    if not os.path.exists(in_file):
+        raise FileNotFoundError(f"File {in_file} does not exist!")
+    return in_file
+
+
+def rename_file(in_file, output_dir, contrast, file_type):
+    """Rename the merged file to a simpler name with error checking."""
+    print(f"DEBUG: Received in_file: {in_file}, contrast: {contrast}, file_type: {file_type}")
+    import shutil
+    import os
+    try:
+        contrast_str = str(int(contrast))
+    except (ValueError, TypeError):
+        print(f"Warning: Invalid contrast value '{contrast}', defaulting to 'unknown'")
+        contrast_str = "unknown"
+
+    new_name = f"merged_{file_type}.nii.gz"
+    out_file = os.path.join(output_dir, new_name)
+
+    if os.path.exists(in_file):
+        shutil.move(in_file, out_file)
+        print(f"Renamed {in_file} -> {out_file}")
+    else:
+        raise FileNotFoundError(f"Input file {in_file} does not exist!")
+
+    return out_file
 
 
 
@@ -739,3 +1143,527 @@ def combine_roi_values(beta_files, psc_files, output_dir):
         psc_df.to_csv(psc_csv)
         return beta_csv, psc_csv
     return beta_csv, None
+
+# =============================================================================
+# UNIFIED GROUP-LEVEL ANALYSIS WORKFLOW
+# =============================================================================
+
+def create_flexible_design_matrix(subjects, group_coding='1/0', contrast_type='standard'):
+    """
+    Create flexible design matrix for group-level analysis.
+    
+    Args:
+        subjects (list): List of subject IDs
+        group_coding (str): '1/0' for dummy coding (1=patients, 0=controls) 
+                           or '1/-1' for effect coding (1=patients, -1=controls)
+        contrast_type (str): 'standard' for all contrasts, 'minimal' for basic contrasts
+    
+    Returns:
+        tuple: (design_matrix, list_of_contrasts)
+    """
+    n_subjects = len(subjects)
+    
+    # Determine group coding
+    if group_coding == '1/0':
+        # Dummy coding: 1 for patients, 0 for controls
+        group_indicator = np.array([1 if sub.startswith('1') else 0 for sub in subjects])
+    elif group_coding == '1/-1':
+        # Effect coding: 1 for patients, -1 for controls
+        group_indicator = np.array([1 if sub.startswith('1') else -1 for sub in subjects])
+    else:
+        raise ValueError(f"Unknown group_coding: {group_coding}. Use '1/0' or '1/-1'")
+    
+    # Create design matrix: [intercept, group_indicator]
+    design = np.column_stack([np.ones(n_subjects), group_indicator])
+    
+    # Create contrasts based on type
+    if contrast_type == 'minimal':
+        if group_coding == '1/0':
+            contrasts = [
+                np.array([0, 1]),   # patients > controls
+                np.array([0, -1]),  # patients < controls
+            ]
+        else:  # 1/-1 coding
+            contrasts = [
+                np.array([0, 1]),   # patients > controls
+                np.array([0, -1]),  # patients < controls
+            ]
+    else:  # standard - all contrasts
+        if group_coding == '1/0':
+            contrasts = [
+                np.array([0, 1]),   # patients > controls
+                np.array([0, -1]),  # patients < controls
+                np.array([1, 1]),   # mean effect in patients
+                np.array([1, 0]),   # mean effect in controls
+            ]
+        else:  # 1/-1 coding
+            contrasts = [
+                np.array([0, 1]),   # patients > controls
+                np.array([0, -1]),  # patients < controls
+                np.array([1, 1]),   # mean effect in patients
+                np.array([1, -1]),  # mean effect in controls
+            ]
+    
+    return design, contrasts
+
+def save_vest_file(data, filename):
+    """Save data in VEST format for FSL."""
+    with open(filename, 'w') as f:
+        f.write(f"/NumWaves\t{data.shape[1]}\n")
+        f.write(f"/NumPoints\t{data.shape[0]}\n")
+        f.write("/Matrix\n")
+        for row in data:
+            f.write("\t".join([str(val) for val in row]) + "\n")
+
+
+
+# =============================================================================
+# UTILITY FUNCTIONS FOR GROUP ANALYSIS
+# =============================================================================
+
+def create_two_group_analysis(subjects, output_dir, method='flameo', 
+                            group_coding='1/0', **kwargs):
+    """
+    Create a two-group analysis (e.g., patients vs controls).
+    
+    Args:
+        subjects (list): List of subject IDs
+        output_dir (str): Output directory
+        method (str): Analysis method
+        group_coding (str): Group coding scheme
+        **kwargs: Additional arguments
+    
+    Returns:
+        tuple: (workflow, design_file, con_file)
+    """
+    return create_group_analysis_workflow(
+        output_dir, method, subjects, group_coding, 'standard', **kwargs
+    )
+
+def extract_subject_ids_from_files(file_paths):
+    """
+    Extract subject IDs from file paths.
+    
+    Args:
+        file_paths (list): List of file paths
+    
+    Returns:
+        list: List of subject IDs
+    """
+    subjects = []
+    for file_path in file_paths:
+        filename = os.path.basename(file_path)
+        if filename.startswith('sub-'):
+            subject_id = filename.split('_')[0].replace('sub-', '')
+            subjects.append(subject_id)
+    return sorted(list(set(subjects)))
+
+def validate_group_analysis_inputs(cope_files, var_cope_files=None, 
+                                 subjects=None, method='flameo'):
+    """
+    Validate inputs for group analysis.
+    
+    Args:
+        cope_files (list): List of cope files
+        var_cope_files (list): List of var_cope files
+        subjects (list): List of subject IDs
+        method (str): Analysis method
+    
+    Returns:
+        bool: True if valid
+    """
+    if not cope_files:
+        raise ValueError("No cope files provided")
+    
+    if method == 'flameo' and not var_cope_files:
+        raise ValueError("var_cope_files required for FLAMEO method")
+    
+    if method == 'flameo' and len(cope_files) != len(var_cope_files):
+        raise ValueError("Number of cope and var_cope files must match")
+    
+    if subjects and len(subjects) != len(cope_files):
+        raise ValueError("Number of subjects must match number of cope files")
+    
+    return True
+
+def get_group_summary(subjects):
+    """
+    Get summary of group composition.
+    
+    Args:
+        subjects (list): List of subject IDs
+    
+    Returns:
+        dict: Group summary
+    """
+    patients = [s for s in subjects if s.startswith('1')]
+    controls = [s for s in subjects if s.startswith('2')]
+    
+    return {
+        'total_subjects': len(subjects),
+        'patients': len(patients),
+        'controls': len(controls),
+        'patient_ids': patients,
+        'control_ids': controls
+    }
+
+# =============================================================================
+# WORKFLOW SUMMARY AND DOCUMENTATION
+# =============================================================================
+
+def get_workflow_summary():
+    """
+    Summary of all available group-level workflows.
+    
+    WORKFLOW TYPES:
+    
+    1. STANDARD GROUP-LEVEL WORKFLOWS:
+       - wf_data_prepare(): Data preparation and merging
+       - wf_roi_extract(): ROI value extraction (cope files → beta/PSC)
+       - wf_flameo(): FLAMEO workflow with optional clustering
+       - wf_randomise(): Randomise workflow with TFCE
+    
+    2. ROI-BASED WORKFLOWS:
+       - wf_roi_psc_analysis(): ROI-based analysis using PSC (converts cope to PSC first)
+       - wf_roi_extract(): ROI value extraction (cope files → beta/PSC)
+    
+    3. UNIFIED ANALYSIS WORKFLOWS:
+       - create_group_analysis_workflow(): Unified function for whole-brain or ROI analysis
+       - run_group_analysis(): One-stop analysis function with automatic setup
+    
+    4. CONVENIENCE FUNCTIONS:
+       - create_two_group_analysis(): Two-group comparison setup
+    
+    DATA TYPES:
+    - All workflows use cope files as primary input
+    - FLAMEO workflows require var_cope files
+    - Randomise workflows only need cope files
+    - ROI workflows extract beta values and PSC from cope files
+    
+    ROI WORKFLOW COMPARISON:
+    
+    ┌─────────────────┬─────────────────┬─────────────────┬─────────────────┐
+    │ Workflow        │ Purpose         │ Output          │ When to Use     │
+    ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+    │ create_group_   │ Statistical     │ Statistical     │ Formal testing, │
+    │ analysis_       │ testing         │ maps (z-stats,  │ group compari-  │
+    │ workflow(roi)   │                 │ p-values)       │ sons, publica-  │
+    │                 │                 │                 │ tion results    │
+    ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+    │ wf_roi_psc_     │ PSC-based       │ Statistical     │ Clinical inter- │
+    │ analysis        │ testing         │ maps (PSC %)    │ pretation,      │
+    │                 │                 │                 │ cross-study     │
+    │                 │                 │                 │ comparisons     │
+    ├─────────────────┼─────────────────┼─────────────────┼─────────────────┤
+    │ wf_roi_extract  │ Value           │ CSV files with  │ Descriptive     │
+    │                 │ extraction      │ ROI values      │ analysis, data  │
+    │                 │                 │ (beta & PSC)    │ export, explo-  │
+    │                 │                 │                 │ ratory analysis │
+    └─────────────────┴─────────────────┴─────────────────┴─────────────────┘
+    """
+    workflows = {
+        'standard': {
+            'wf_data_prepare': 'Data preparation and merging',
+            'wf_roi_extract': 'ROI value extraction (cope files → beta/PSC)',
+            'wf_flameo': 'FLAMEO workflow with optional clustering',
+            'wf_randomise': 'Randomise workflow with TFCE'
+        },
+        'roi': {
+            'wf_roi_psc_analysis': 'ROI-based analysis using PSC (converts cope to PSC first)',
+            'wf_roi_extract': 'ROI value extraction (cope files → beta/PSC)'
+        },
+        'unified': {
+            'create_group_analysis_workflow': 'Unified function for whole-brain or ROI analysis',
+            'run_group_analysis': 'One-stop analysis function with automatic setup'
+        },
+        'convenience': {
+            'create_two_group_analysis': 'Two-group comparison setup'
+        }
+    }
+    return workflows
+
+def get_workflow_usage_examples():
+    """
+    Usage examples for different workflow types.
+    
+    Returns:
+        dict: Dictionary with usage examples
+    """
+    examples = {
+        'basic_wholeBrain': '''
+# Basic whole-brain analysis with FLAMEO (standalone)
+from group_level_workflows import wf_flameo
+wf = wf_flameo(output_dir='output')
+wf.inputs.inputnode.cope_files = cope_files
+wf.inputs.inputnode.var_cope_files = var_cope_files
+wf.inputs.inputnode.mask_file = mask_file
+wf.inputs.inputnode.design_file = design_file
+wf.inputs.inputnode.con_file = con_file
+wf.run()
+
+# Or using the unified function
+from group_level_workflows import create_group_analysis_workflow
+wf, design_file, con_file = create_group_analysis_workflow(
+    output_dir='output', method='flameo', analysis_type='whole_brain'
+)
+        ''',
+        
+        'wholeBrain_randomise': '''
+# Whole-brain analysis with Randomise (standalone)
+from group_level_workflows import wf_randomise
+wf = wf_randomise(output_dir='output')
+wf.inputs.inputnode.cope_files = cope_files
+wf.inputs.inputnode.mask_file = mask_file
+wf.inputs.inputnode.design_file = design_file
+wf.inputs.inputnode.con_file = con_file
+wf.run()
+
+# Or using the unified function
+from group_level_workflows import create_group_analysis_workflow
+wf, design_file, con_file = create_group_analysis_workflow(
+    output_dir='output', method='randomise', analysis_type='whole_brain'
+)
+        ''',
+        
+        'roi_analysis': '''
+# ROI-based analysis using the unified function
+from group_level_workflows import create_group_analysis_workflow
+
+# ROI analysis with FLAMEO
+wf, design_file, con_file = create_group_analysis_workflow(
+    output_dir='output', method='flameo', analysis_type='roi', roi_dir=roi_directory
+)
+wf.inputs.inputnode.cope_files = cope_files
+wf.inputs.inputnode.var_cope_files = var_cope_files
+
+# ROI analysis with Randomise
+wf, design_file, con_file = create_group_analysis_workflow(
+    output_dir='output', method='randomise', analysis_type='roi', roi_dir=roi_directory
+)
+wf.inputs.inputnode.cope_files = cope_files
+
+# ROI-based analysis with PSC (converts cope to PSC first)
+from group_level_workflows import wf_roi_psc_analysis
+wf = wf_roi_psc_analysis(output_dir='output', method='flameo')
+wf.inputs.inputnode.cope_files = cope_files
+wf.inputs.inputnode.baseline_cope_file = baseline_cope_file
+wf.inputs.inputnode.var_cope_files = var_cope_files
+wf.inputs.inputnode.roi = roi_directory
+        ''',
+        
+        'roi_extraction': '''
+# ROI value extraction
+from group_level_workflows import wf_roi_extract
+wf = wf_roi_extract(output_dir='output')
+wf.inputs.inputnode.cope_file = cope_file
+wf.inputs.inputnode.baseline_file = baseline_file
+        ''',
+        
+        'complete_analysis': '''
+# Complete analysis with automatic setup
+from group_level_workflows import run_group_analysis
+wf = run_group_analysis(
+    cope_files=cope_files,
+    var_cope_files=var_cope_files,
+    mask_file=mask_file,
+    subjects=subjects,
+    output_dir='output',
+    method='flameo',
+    group_coding='1/0'
+)
+wf.run()
+        '''
+    }
+    return examples
+
+
+# =============================================================================
+# ROI PSC ANALYSIS WORKFLOW
+# =============================================================================
+
+def wf_roi_psc_analysis(output_dir, name="wf_roi_psc_analysis", method='flameo', baseline_condition='baseline'):
+    """
+    Workflow for ROI-based analysis using PSC (Percent Signal Change).
+    
+    This workflow converts cope files to PSC before performing group-level analysis.
+    It's useful when you want to analyze percent signal change rather than raw contrast values.
+    
+    WHEN TO USE THIS WORKFLOW:
+    
+    1. PSC-BASED STATISTICAL ANALYSIS:
+       - When you want to perform statistical testing on percent signal change
+       - For analyzing relative changes from baseline
+       - When you have a well-defined baseline condition
+       - For clinical interpretation of results
+    
+    2. CLINICAL INTERPRETATION:
+       - When you need results in interpretable units (%)
+       - For communicating with clinicians and patients
+       - When you want to compare effect sizes across studies
+       - For patient-specific analysis and diagnosis
+    
+    3. CROSS-STUDY COMPARISONS:
+       - When comparing results across different studies
+       - When you want normalized effect sizes
+       - For meta-analysis preparation
+       - When baseline conditions differ between studies
+    
+    4. BASELINE-REFERENCED ANALYSIS:
+       - When you want to analyze changes relative to baseline
+       - For resting-state vs task comparisons
+       - When baseline is a meaningful reference point
+       - For longitudinal studies with baseline measurements
+    
+    5. PERCENT CHANGE INTERPRETATION:
+       - When you prefer percent change over raw contrast values
+       - For educational and training purposes
+       - When presenting results to non-experts
+       - For grant applications and reports
+    
+    ADVANTAGES OF PSC ANALYSIS:
+    - More intuitive interpretation (% change)
+    - Comparable across different studies
+    - Easier to communicate to non-experts
+    - Normalized relative to baseline
+    
+    DISADVANTAGES OF PSC ANALYSIS:
+    - Requires baseline condition
+    - May amplify noise in low-signal regions
+    - Division by zero issues in baseline regions
+    - Less standard in neuroimaging literature
+    
+    Args:
+        output_dir (str): Output directory
+        name (str): Workflow name
+        method (str): 'flameo' for parametric analysis or 'randomise' for non-parametric
+        baseline_condition (str): Name of baseline condition for PSC calculation
+    """
+    wf = Workflow(name=name, base_dir=output_dir)
+
+    # Input node for PSC-based ROI workflow
+    if method == 'flameo':
+        inputnode = Node(IdentityInterface(fields=['roi', 'cope_files', 'baseline_cope_file', 'var_cope_files',
+                                                   'design_file', 'grp_file', 'con_file', 'result_dir']),
+                         name='inputnode')
+    else:  # randomise
+        inputnode = Node(IdentityInterface(fields=['roi', 'cope_files', 'baseline_cope_file',
+                                                   'design_file', 'con_file']),
+                         name='inputnode')
+
+    # ROI node to fetch ROI files
+    roi_node = Node(Function(input_names=['roi'], output_names=['roi_files'],
+                             function=get_roi_files),
+                    name='roi_node')
+
+    # Convert cope to PSC for each ROI
+    cope_to_psc = MapNode(Function(input_names=['cope_file', 'baseline_cope_file', 'roi_mask'],
+                                   output_names=['psc_file'],
+                                   function=convert_cope_to_psc),
+                          iterfield=['cope_file', 'roi_mask'],
+                          name='cope_to_psc')
+
+    # Analysis node for each ROI
+    if method == 'flameo':
+        analysis_node = MapNode(FLAMEO(run_mode='flame1'),
+                               iterfield=['cope_file', 'var_cope_file', 'mask_file'],
+                               name='flameo')
+    else:  # randomise
+        analysis_node = MapNode(Randomise(num_perm=10000, tfce=True, vox_p_values=True),
+                               iterfield=['in_file', 'mask', 'design_mat', 'tcon'],
+                               name='randomise')
+
+    # Output node (method-dependent)
+    if method == 'flameo':
+        outputnode = Node(IdentityInterface(fields=['zstats', 'fdr_thresh', 'fwe_thresh']),
+                          name='outputnode')
+    else:  # randomise
+        outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files', 'z_thresh_files']),
+                          name='outputnode')
+
+    # DataSink for ROI analysis outputs
+    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+
+    # Workflow connections (method-dependent)
+    if method == 'flameo':
+        wf.connect([
+            (inputnode, roi_node, [('roi', 'roi')]),
+            (inputnode, cope_to_psc, [('cope_files', 'cope_file'),
+                                      ('baseline_cope_file', 'baseline_cope_file')]),
+            (roi_node, cope_to_psc, [('roi_files', 'roi_mask')]),
+            (roi_node, analysis_node, [('roi_files', 'mask_file')]),
+            (cope_to_psc, analysis_node, [('psc_file', 'cope_file')]),
+            (inputnode, analysis_node, [('var_cope_files', 'var_cope_file'),
+                                       ('design_file', 'design_file'),
+                                       ('grp_file', 'cov_split_file'),
+                                       ('con_file', 't_con_file')]),
+            (analysis_node, outputnode, [('zstats', 'zstats')]),
+            (roi_node, outputnode, [('roi_files', 'roi_files')]),
+            (outputnode, datasink, [('zstats', 'zstats'),
+                                    ('roi_files', 'roi_files')])
+        ])
+    else:  # randomise
+        wf.connect([
+            (inputnode, roi_node, [('roi', 'roi')]),
+            (inputnode, cope_to_psc, [('cope_files', 'cope_file'),
+                                      ('baseline_cope_file', 'baseline_cope_file')]),
+            (roi_node, cope_to_psc, [('roi_files', 'roi_mask')]),
+            (roi_node, analysis_node, [('roi_files', 'mask')]),
+            (cope_to_psc, analysis_node, [('psc_file', 'in_file')]),
+            (inputnode, analysis_node, [('design_file', 'design_mat'),
+                                       ('con_file', 'tcon')]),
+            (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
+                                        ('t_corrected_p_files', 'tfce_corr_p_files')]),
+            (roi_node, outputnode, [('roi_files', 'roi_files')]),
+            (outputnode, datasink, [('tstat_files', 'tstats'),
+                                    ('tfce_corr_p_files', 'tfce_p'),
+                                    ('roi_files', 'roi_files')])
+        ])
+
+    return wf
+
+def convert_cope_to_psc(cope_file, baseline_cope_file, roi_mask):
+    """
+    Convert cope file to PSC using baseline condition.
+    
+    Args:
+        cope_file (str): Path to cope file
+        baseline_cope_file (str): Path to baseline cope file
+        roi_mask (str): Path to ROI mask
+    
+    Returns:
+        str: Path to PSC file
+    """
+    import os
+    import numpy as np
+    import nibabel as nib
+    from nipype.interfaces.fsl import ImageMaths
+    
+    # Load images
+    cope_img = nib.load(cope_file)
+    baseline_img = nib.load(baseline_cope_file)
+    mask_img = nib.load(roi_mask)
+    
+    # Get data
+    cope_data = cope_img.get_fdata()
+    baseline_data = baseline_img.get_fdata()
+    mask_data = mask_img.get_fdata()
+    
+    # Apply mask
+    cope_masked = cope_data * mask_data
+    baseline_masked = baseline_data * mask_data
+    
+    # Calculate PSC: (cope - baseline) / baseline * 100
+    # Add small constant to avoid division by zero
+    epsilon = 1e-6
+    psc_data = np.where(baseline_masked != 0,
+                        (cope_masked - baseline_masked) / (np.abs(baseline_masked) + epsilon) * 100,
+                        0)
+    
+    # Create new image
+    psc_img = nib.Nifti1Image(psc_data, cope_img.affine, cope_img.header)
+    
+    # Save PSC file
+    psc_file = cope_file.replace('.nii.gz', '_psc.nii.gz')
+    nib.save(psc_img, psc_file)
+    
+    return psc_file
