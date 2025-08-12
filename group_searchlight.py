@@ -23,7 +23,7 @@ def setup_logging():
 logger = setup_logging()
 
 def create_design_matrix(subjects):
-    """Create a two-group t-test design matrix in VEST format.
+    """Create a two-group design matrix in VEST format for testing group effects.
     
     Args:
         subjects: List of subject IDs where IDs starting with '1' are patients 
@@ -39,11 +39,17 @@ def create_design_matrix(subjects):
     # Second column: group indicator (1=patient, 0=control)
     design = np.column_stack([np.ones(n_subjects), group_indicator])
     
-    # Create contrast: [0, 1] to test patients vs controls
-    # This tests if the group effect (patients - controls) is different from zero
-    con = np.array([0, 1])
+    # Create contrasts for the 4 tests:
+    # con1: [0, 1] - patients > controls (patients - controls)
+    # con2: [0, -1] - patients < controls (controls - patients) 
+    # con3: [1, 1] - mean effect in patients (intercept + group effect)
+    # con4: [1, 0] - mean effect in controls (intercept only)
+    con1 = np.array([0, 1])   # patients > controls
+    con2 = np.array([0, -1])  # patients < controls
+    con3 = np.array([1, 1])   # mean effect in patients
+    con4 = np.array([1, 0])   # mean effect in controls
     
-    return design, con
+    return design, [con1, con2, con3, con4]
 
 def save_vest_file(data, filename):
     """Save data in VEST format for FSL."""
@@ -61,7 +67,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
     # Input node
     inputnode = Node(
         IdentityInterface(fields=[
-            'cope_files', 'mask_file', 'design_file', 'con_file', 'result_dir'
+            'cope_files', 'var_cope_files', 'mask_file', 'design_file', 'con_file', 'result_dir'
         ]),
         name='inputnode'
     )
@@ -118,6 +124,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
         # FLAMEO inputs
         (merge_copes, flameo, [('merged_file', 'cope_file')]),
         (inputnode, flameo, [
+            ('var_cope_files', 'var_cope_file'),
             ('mask_file', 'mask_file'),
             ('design_file', 'design_mat'),
             ('con_file', 't_con_file')
@@ -275,31 +282,45 @@ def main():
             logger.error(f"Mask file not found for {task}: {mask_file}")
             continue
 
-        # Collect cope files for the specified map type
+        # Collect cope files and var_cope files for the specified map type
         cope_files = []
+        var_cope_files = []
+        subjects_with_data = []
         for sub in subjects:
             cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}.nii.gz')
-            if os.path.exists(cope_file):
+            var_cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}_var.nii.gz')
+            if os.path.exists(cope_file) and os.path.exists(var_cope_file):
                 cope_files.append(cope_file)
+                var_cope_files.append(var_cope_file)
+                subjects_with_data.append(sub)
             else:
-                logger.warning(f"Cope file missing for sub-{sub}, {map_type}, {task}: {cope_file}")
+                logger.warning(f"Files missing for sub-{sub}, {map_type}, {task}: cope={os.path.exists(cope_file)}, var_cope={os.path.exists(var_cope_file)}")
         if len(cope_files) < 2:
             logger.error(f"Insufficient cope files for {map_type}, {task}: {len(cope_files)} found")
             continue
-        logger.info(f"Found {len(cope_files)} cope files for {map_type}, {task}")
+        logger.info(f"Found {len(cope_files)} cope files and {len(var_cope_files)} var_cope files for {map_type}, {task}")
 
-        # Create design matrix and contrast
-        design, con = create_design_matrix(subjects)
+        # Create design matrix and contrasts using only subjects with data
+        design, contrasts = create_design_matrix(subjects_with_data)
         design_file = os.path.join(output_dir, f'design_{map_type}.mat')
         con_file = os.path.join(output_dir, f'contrast_{map_type}.con')
         save_vest_file(design, design_file)
-        save_vest_file(con.reshape(1, -1), con_file)  # Reshape contrast to 2D for VEST format
-        logger.info(f"Created design for {task}: {design_file}, contrast: {con_file}")
+        
+        # Save all contrasts in VEST format
+        contrast_matrix = np.array(contrasts)
+        save_vest_file(contrast_matrix, con_file)
+        logger.info(f"Created design for {task}: {design_file}, contrasts: {con_file}")
+        logger.info(f"Contrasts: 1) patients>controls, 2) patients<controls, 3) mean_effect_patients, 4) mean_effect_controls")
         
         # Log group information
-        patients = [s for s in subjects if s.startswith('1')]
-        controls = [s for s in subjects if s.startswith('2')]
+        patients = [s for s in subjects_with_data if s.startswith('1')]
+        controls = [s for s in subjects_with_data if s.startswith('2')]
         logger.info(f"Group analysis: {len(patients)} patients vs {len(controls)} controls")
+        
+        # Check group balance
+        if len(patients) < 1 or len(controls) < 1:
+            logger.error(f"Insufficient subjects in one or both groups for {map_type}, {task}: {len(patients)} patients, {len(controls)} controls")
+            continue
 
         # Select workflow
         wf_name = f'wf_{method}_{map_type}_{task}'
@@ -314,6 +335,7 @@ def main():
         wf.inputs.inputnode.design_file = design_file
         wf.inputs.inputnode.con_file = con_file
         if method == 'flameo':
+            wf.inputs.inputnode.var_cope_files = var_cope_files
             wf.inputs.inputnode.result_dir = os.path.join(output_dir, map_type)
 
         # Run workflow
