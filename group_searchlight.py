@@ -282,23 +282,34 @@ def main():
             logger.error(f"Mask file not found for {task}: {mask_file}")
             continue
 
-        # Collect cope files and var_cope files for the specified map type
+        # Collect cope files for the specified map type
         cope_files = []
-        var_cope_files = []
         subjects_with_data = []
         for sub in subjects:
             cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}.nii.gz')
-            var_cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}_var.nii.gz')
-            if os.path.exists(cope_file) and os.path.exists(var_cope_file):
+            if os.path.exists(cope_file):
                 cope_files.append(cope_file)
-                var_cope_files.append(var_cope_file)
                 subjects_with_data.append(sub)
             else:
-                logger.warning(f"Files missing for sub-{sub}, {map_type}, {task}: cope={os.path.exists(cope_file)}, var_cope={os.path.exists(var_cope_file)}")
+                logger.warning(f"Cope file missing for sub-{sub}, {map_type}, {task}: {cope_file}")
         if len(cope_files) < 2:
             logger.error(f"Insufficient cope files for {map_type}, {task}: {len(cope_files)} found")
             continue
-        logger.info(f"Found {len(cope_files)} cope files and {len(var_cope_files)} var_cope files for {map_type}, {task}")
+        logger.info(f"Found {len(cope_files)} cope files for {map_type}, {task}")
+        
+        # Collect var_cope files only if using FLAMEO
+        var_cope_files = []
+        if method == 'flameo':
+            for sub in subjects_with_data:
+                var_cope_file = os.path.join(data_dir, f'sub-{sub}_task-{task}_{map_type}_var.nii.gz')
+                if os.path.exists(var_cope_file):
+                    var_cope_files.append(var_cope_file)
+                else:
+                    logger.warning(f"Var_cope file missing for sub-{sub}, {map_type}, {task}: {var_cope_file}")
+            if len(var_cope_files) != len(cope_files):
+                logger.error(f"Var_cope files missing for FLAMEO: {len(var_cope_files)} vs {len(cope_files)} cope files")
+                continue
+            logger.info(f"Found {len(var_cope_files)} var_cope files for FLAMEO")
 
         # Create design matrix and contrasts using only subjects with data
         design, contrasts = create_design_matrix(subjects_with_data)
