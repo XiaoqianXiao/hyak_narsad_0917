@@ -9,6 +9,8 @@ import subprocess
 import pandas as pd
 import numpy as np
 
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
 # =============================================================================
 # WORKFLOW DEFINITIONS
 # =============================================================================

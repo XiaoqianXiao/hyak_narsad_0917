@@ -9,6 +9,8 @@ analysis and LSS (Least Squares Separate) analysis.
 Usage:
     python create_1st_voxelWise.py --subject SUBJECT_ID --task TASK_NAME
     python create_1st_voxelWise.py  # Generate SLURM scripts for all subjects
+
+Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 """
 
 # =============================================================================

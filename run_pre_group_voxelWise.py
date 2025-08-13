@@ -16,6 +16,8 @@ Usage:
     python run_pre_group_level.py --filter-column guess --filter-value High
     python run_pre_group_level.py --filter-column Drug --filter-value Placebo --include-columns group_id,drug_id
     python run_pre_group_level.py --filter-column Drug --filter-value Placebo --output-dir /custom/path
+
+Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 """
 
 # =============================================================================

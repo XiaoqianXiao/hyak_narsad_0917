@@ -1,3 +1,5 @@
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
 def _get_tr(in_dict):
     return in_dict.get('RepetitionTime')
 

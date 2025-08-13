@@ -10,6 +10,8 @@ from utils import _bids2nipypeinfo_lss
 from nipype.interfaces.fsl import SUSAN, ApplyMask, FLIRT, FILMGLS, Level1Design, FEATModel
 import logging
 
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
 # Configure logging
 logger = logging.getLogger(__name__)
 

@@ -14,6 +14,8 @@
 #   ./create_group_level_slurm_scripts.sh --data-source standard --analysis-type flameo
 #   ./create_group_level_slurm_scripts.sh --data-source placebo --account psych --partition cpu-g2-mem2x
 #
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+#
 # =============================================================================
 
 # =============================================================================

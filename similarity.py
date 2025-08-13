@@ -1,3 +1,5 @@
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
 import numpy as np
 from nilearn.image import index_img, load_img
 from nilearn.maskers import NiftiLabelsMasker

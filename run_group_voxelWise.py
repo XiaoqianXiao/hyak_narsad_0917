@@ -17,6 +17,8 @@ Usage:
     
     # Custom data paths
     python run_group_level.py --task phase2 --contrast 1 --analysis-type flameo --base-dir /path/to/data --custom-paths
+
+Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 """
 
 # =============================================================================

@@ -14,6 +14,8 @@
 #   ./launch_group_voxelWise.sh --analysis-type flameo    # Launch only flameo scripts
 #   ./launch_group_voxelWise.sh --dry-run                 # Show what would be launched
 #
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+#
 # =============================================================================
 
 # =============================================================================

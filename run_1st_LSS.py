@@ -1,3 +1,5 @@
+# Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
 # run_single_trial.py
 import os
 import argparse
