@@ -76,7 +76,7 @@ logger = setup_logging()
 def main():
     # Parse arguments
     parser = argparse.ArgumentParser(description='Run group-level searchlight analysis for a single map type.')
-    parser.add_argument('--map_type', required=True, help='Map type to process (e.g., within-FIXATION, between-FIXATION-CS-)')
+    parser.add_argument('--map_type', required=True, help='Map type to process (e.g., within-FIXATION, between-FIXATION-CS-_first, between-FIXATION-CS-)')
     parser.add_argument('--method', choices=['flameo', 'randomise'], default='flameo', help='Analysis method: flameo or randomise')
     args = parser.parse_args()
     map_type = args.map_type

@@ -48,8 +48,11 @@ def generate_slurm_scripts(method, work_dir, slurm_dir, container_path, script_p
         script_path (str): Path to the group_LSS_searchlight.py script
         custom_resources (dict): Optional custom resource limits
     """
-    # Trial types for LSS analysis
-    trial_types = ['SHOCK', 'FIXATION', 'CS-', 'CSS', 'CSR']
+    # Trial types for LSS analysis with enhanced CS- condition grouping
+    # CS-_first: First trial of CS- conditions (separate condition)
+    # CS-: All other CS- trials grouped together
+    # Other conditions: Individual trial types
+    trial_types = ['SHOCK', 'FIXATION', 'CS-_first', 'CS-', 'CSS', 'CSR']
     
     # Generate map types for LSS similarity analysis
     map_types = []
@@ -58,7 +61,7 @@ def generate_slurm_scripts(method, work_dir, slurm_dir, container_path, script_p
     for ttype in trial_types:
         map_types.append(f'within-{ttype}')
     
-    # Between-condition maps (e.g., between-FIXATION-CS-, between-SHOCK-CSS)
+    # Between-condition maps (e.g., between-FIXATION-CS-_first, between-FIXATION-CS-, between-SHOCK-CSS)
     for t1, t2 in combinations(trial_types, 2):
         map_types.append(f'between-{t1}-{t2}')
     
@@ -190,7 +193,7 @@ def main():
 
     # Handle list-map-types option
     if args.list_map_types:
-        trial_types = ['SHOCK', 'FIXATION', 'CS-', 'CSS', 'CSR']
+        trial_types = ['SHOCK', 'FIXATION', 'CS-_first', 'CS-', 'CSS', 'CSR']
         map_types = []
         
         # Within-condition maps
@@ -203,12 +206,12 @@ def main():
             map_types.append(f'between-{t1}-{t2}')
         
         print("Map types that will be generated:")
-        print("Within-condition maps (5):")
-        for i, map_type in enumerate(map_types[:5], 1):
+        print("Within-condition maps (6):")
+        for i, map_type in enumerate(map_types[:6], 1):
             print(f"  {i}. {map_type}")
         
-        print("\nBetween-condition maps (10):")
-        for i, map_type in enumerate(map_types[5:], 6):
+        print("\nBetween-condition maps (15):")
+        for i, map_type in enumerate(map_types[6:], 7):
             print(f"  {i}. {map_type}")
         
         print(f"\nTotal: {len(map_types)} map types × 2 tasks × 2 methods = {len(map_types) * 2 * 2} SLURM scripts")
@@ -274,7 +277,7 @@ def main():
         if args.dry_run:
             logger.info("DRY RUN MODE - No files will be created")
             # Calculate what would be generated
-            trial_types = ['SHOCK', 'FIXATION', 'CS-', 'CSS', 'CSR']
+            trial_types = ['SHOCK', 'FIXATION', 'CS-_first', 'CS-', 'CSS', 'CSR']
             map_types = []
             for ttype in trial_types:
                 map_types.append(f'within-{ttype}')
