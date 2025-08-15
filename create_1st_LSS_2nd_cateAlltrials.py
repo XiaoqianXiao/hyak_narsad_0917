@@ -17,7 +17,7 @@ Usage:
     python create_1st_LSS_2nd_cateAlltrials.py --tasks phase2 phase3
     
     # Generate scripts with custom SLURM settings
-    python create_1st_LSS_2nd_cateAlltrials.py --account psych --partition cpu-g2-mem2x --memory 64G
+    python create_1st_LSS_2nd_cateAlltrials.py --account fang --partition ckpt-all --memory 64G
     
     # Generate scripts for specific contrasts
     python create_1st_LSS_2nd_cateAlltrials.py --contrasts 1 2 3
@@ -310,7 +310,7 @@ Examples:
     python create_1st_LSS_2nd_cateAlltrials.py --tasks phase2 phase3
     
     # Generate scripts with custom SLURM settings
-    python create_1st_LSS_2nd_cateAlltrials.py --account psych --partition cpu-g2-mem2x --memory 64G
+    python create_1st_LSS_2nd_cateAlltrials.py --account fang --partition ckpt-all --memory 64G
     
     # Generate scripts for specific contrasts
     python create_1st_LSS_2nd_cateAlltrials.py --contrasts 1 2 3
@@ -344,8 +344,8 @@ Examples:
     # SLURM configuration
     parser.add_argument('--account', default='fang',
                        help='SLURM account (default: fang)')
-    parser.add_argument('--partition', default='cpu-g2',
-                       help='SLURM partition (default: cpu-g2)')
+    parser.add_argument('--partition', default='ckpt-all',
+                       help='SLURM partition (default: ckpt-all)')
     parser.add_argument('--cpus-per-task', type=int, default=4,
                        help='CPUs per task (default: 4)')
     parser.add_argument('--memory', default='40G',

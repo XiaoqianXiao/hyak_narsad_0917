@@ -8,11 +8,11 @@
 # It supports different analysis types, data sources, and configurations.
 #
 # Usage:
-#   ./create_group_level_slurm_scripts.sh --data-source standard
-#   ./create_group_level_slurm_scripts.sh --data-source placebo
-#   ./create_group_level_slurm_scripts.sh --data-source guess
-#   ./create_group_level_slurm_scripts.sh --data-source standard --analysis-type flameo
-#   ./create_group_level_slurm_scripts.sh --data-source placebo --account psych --partition cpu-g2-mem2x
+#   ./create_group_voxelWise.sh --data-source standard
+#   ./create_group_voxelWise.sh --data-source placebo
+#   ./create_group_voxelWise.sh --data-source guess
+#   ./create_group_voxelWise.sh --data-source standard --analysis-type flameo
+#   ./create_group_voxelWise.sh --data-source placebo --account fang --partition ckpt-all
 #
 # Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 #
@@ -24,7 +24,7 @@
 
 # Default settings
 DEFAULT_ACCOUNT="fang"
-DEFAULT_PARTITION="cpu-g2"
+DEFAULT_PARTITION="ckpt-all"
 DEFAULT_CPUS_PER_TASK=4
 DEFAULT_MEMORY="16G"
 DEFAULT_TIME="8:00:00"
@@ -81,7 +81,7 @@ EXAMPLES:
     $0 --data-source placebo --analysis-type flameo
     
     # Generate scripts for guess analysis with custom settings
-    $0 --data-source guess --account psych --partition cpu-g2-mem2x --memory 32G
+    $0 --data-source guess --account fang --partition ckpt-all --memory 32G
     
     # Generate scripts for standard analysis with custom base directory
     $0 --data-source standard --base-dir /custom/path

@@ -270,7 +270,7 @@ def create_slurm_script(sub, inputs, work_dir, output_dir, task, container_path)
     slurm_script = f"""#!/bin/bash
 #SBATCH --job-name=first_level_sub_{sub}
 #SBATCH --account=fang
-#SBATCH --partition=cpu-g2
+#SBATCH --partition=ckpt-all
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
