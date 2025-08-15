@@ -247,8 +247,9 @@ def process_subject_task(layout, subject, task, slurm_config, contrasts=None, co
         return 0
     
     try:
-        # Read events file to get trial information
-        events_df = pd.read_csv(events_file)
+        # Read events file to get trial information with automatic separator detection
+        from utils import read_csv_with_detection
+        events_df = read_csv_with_detection(events_file)
         
         # Check if trial_ID column exists
         if 'trial_ID' not in events_df.columns:

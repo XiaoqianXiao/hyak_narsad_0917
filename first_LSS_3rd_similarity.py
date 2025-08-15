@@ -271,7 +271,8 @@ def load_and_validate_data(args, logger):
     
     logger.info(f"Events file: {events_file}, exists: {os.path.exists(events_file)}")
     try:
-        events = pd.read_csv(events_file)
+        from utils import read_csv_with_detection
+        events = read_csv_with_detection(events_file)
         logger.info(f"Events loaded, shape: {events.shape}, columns: {events.columns}")
     except Exception as e:
         logger.error(f"Error loading events file {events_file}: {e}")

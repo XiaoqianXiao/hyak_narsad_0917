@@ -1,5 +1,7 @@
 # Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 
+import pandas as pd
+
 def _get_tr(in_dict):
     return in_dict.get('RepetitionTime')
 
@@ -211,6 +213,49 @@ def print_output_traits(interface_class):
     print("-------------------------------|----------")
     for name, trait in sorted_traits:
         print(f"{name:30} | {trait.mandatory}")
+
+
+def detect_csv_separator(file_path, sample_size=1024):
+    """
+    Automatically detect the separator used in a CSV file.
+    
+    Args:
+        file_path (str): Path to the CSV file
+        sample_size (int): Number of characters to read for detection
+    
+    Returns:
+        str: Detected separator ('\t' for tab, ',' for comma)
+    """
+    try:
+        with open(file_path, 'r') as f:
+            sample = f.read(sample_size)
+        
+        # Count occurrences of potential separators
+        comma_count = sample.count(',')
+        tab_count = sample.count('\t')
+        
+        # Determine the most likely separator
+        if tab_count > comma_count:
+            return '\t'
+        else:
+            return ','
+    except Exception as e:
+        # Default to comma if detection fails
+        return ','
+
+def read_csv_with_detection(file_path, **kwargs):
+    """
+    Read a CSV file with automatic separator detection.
+    
+    Args:
+        file_path (str): Path to the CSV file
+        **kwargs: Additional arguments to pass to pd.read_csv
+    
+    Returns:
+        pandas.DataFrame: Loaded CSV data
+    """
+    separator = detect_csv_separator(file_path)
+    return pd.read_csv(file_path, sep=separator, **kwargs)
 
 
 

@@ -108,14 +108,15 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
         pandas.DataFrame: Filtered behavioral data with appropriate mappings
     """
     try:
-        # Load drug order data
-        df_drug = pd.read_csv(DRUG_FILE)
+        # Load drug order data with automatic separator detection
+        from utils import read_csv_with_detection
+        df_drug = read_csv_with_detection(DRUG_FILE)
         df_drug['group'] = df_drug['subID'].apply(
             lambda x: 'Patients' if x.startswith('N1') else 'Controls'
         )
         
-        # Load ECR data
-        df_ECR = pd.read_csv(ECR_FILE)
+        # Load ECR data with automatic separator detection
+        df_ECR = read_csv_with_detection(ECR_FILE)
         
         # Merge behavioral data
         df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
