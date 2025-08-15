@@ -141,10 +141,10 @@ def create_contrasts(condition_names, contrast_type='standard'):
     # Create list of all conditions for contrast generation
     all_contrast_conditions = []
     if cs_first_trial:
-        all_contrast_conditions.append('CS-_first')  # First trial as CS-_first
+        all_contrast_conditions.append(cs_first_trial)  # Use original name, not renamed
     if cs_other_trials:
-        # Add grouped CS- trials as CS- (without _first suffix)
-        all_contrast_conditions.append('CS-')
+        # Add all other CS- trials as individual conditions (don't group them)
+        all_contrast_conditions.extend(cs_other_trials)
     all_contrast_conditions.extend(other_conditions)
     
     contrasts = []
@@ -178,9 +178,9 @@ def create_contrasts(condition_names, contrast_type='standard'):
     
     logger.info(f"Generated {len(contrasts)} contrasts for {len(all_contrast_conditions)} conditions:")
     if cs_first_trial:
-        logger.info(f"  - First CS- trial: {cs_first_trial} → 'CS-_first'")
+        logger.info(f"  - First CS- trial: {cs_first_trial} (kept as separate condition)")
     if cs_other_trials:
-        logger.info(f"  - Other CS- trials grouped: {cs_other_trials} → 'CS-'")
+        logger.info(f"  - Other CS- trials: {cs_other_trials} (kept as individual conditions)")
     logger.info(f"  - Other trial types: {other_conditions}")
     
     return contrasts, cs_first_trial, cs_other_trials, other_conditions
@@ -191,8 +191,8 @@ def create_cs_separated_contrasts(condition_names, contrast_type='standard'):
     Create contrasts with enhanced CS- condition grouping.
     
     This function creates contrasts where:
-    1. First trial of CS- conditions is handled as a separate condition (CS-_first)
-    2. All other CS- trials are grouped together as one condition (CS-)
+    1. First trial of CS- conditions is handled as a separate condition (keeps original name)
+    2. All other CS- trials are kept as individual conditions (keeps original names)
     3. All other trial types are handled as individual conditions
     
     Args:
@@ -213,22 +213,22 @@ def create_cs_separated_contrasts(condition_names, contrast_type='standard'):
     if cs_first_trial or cs_other_trials:
         cs_regressor_info = {
             'first_trial': cs_first_trial,
-            'other_trials_grouped': cs_other_trials,
+            'other_trials': cs_other_trials,  # Keep as individual conditions
             'regressor_type': 'enhanced_grouping',
-            'description': 'First trial CS- as CS-_first, other CS- trials grouped as CS-',
+            'description': 'First trial CS- kept separate, other CS- trials as individual conditions',
             'contrast_included': True,
-            'grouping_strategy': 'first_trial_separate_others_grouped',
+            'grouping_strategy': 'first_trial_separate_others_individual',
             'condition_names': {
-                'first_trial': 'CS-_first',
-                'other_trials': 'CS-',
+                'first_trial': cs_first_trial,  # Use original name
+                'other_trials': cs_other_trials,  # Use original names
                 'other_types': other_conditions
             }
         }
         logger.info(f"Enhanced CS- condition grouping configured:")
         if cs_first_trial:
-            logger.info(f"  - First trial '{cs_first_trial}' as 'CS-_first' condition")
+            logger.info(f"  - First trial '{cs_first_trial}' kept as separate condition")
         if cs_other_trials:
-            logger.info(f"  - Other CS- trials grouped as 'CS-': {cs_other_trials}")
+            logger.info(f"  - Other CS- trials kept as individual conditions: {cs_other_trials}")
     
     return contrasts, cs_first_trial, cs_other_trials, other_conditions, cs_regressor_info
 
@@ -260,7 +260,7 @@ def create_custom_contrasts(condition_names, contrast_patterns):
     # Create list of all conditions for contrast generation
     all_contrast_conditions = []
     if cs_first_trial:
-        all_contrast_conditions.append('CS-_first')  # First trial as CS-_first
+        all_contrast_conditions.append(cs_first_trial)  # Use original name, not renamed
     if cs_other_trials:
         # Add grouped CS- trials as CS- (without _first suffix)
         all_contrast_conditions.append('CS-')
@@ -304,9 +304,9 @@ def create_custom_contrasts(condition_names, contrast_patterns):
     
     logger.info(f"Generated {len(contrasts)} custom contrasts with enhanced CS- grouping:")
     if cs_first_trial:
-        logger.info(f"  - First CS- trial: {cs_first_trial} → 'CS-_first'")
+        logger.info(f"  - First CS- trial: {cs_first_trial} (kept as separate condition)")
     if cs_other_trials:
-        logger.info(f"  - Other CS- trials grouped: {cs_other_trials} → 'CS-'")
+        logger.info(f"  - Other CS- trials: {cs_other_trials} (kept as individual conditions)")
     logger.info(f"  - Other trial types: {other_conditions}")
     
     return contrasts, cs_first_trial, cs_other_trials, other_conditions
@@ -923,8 +923,8 @@ def example_usage():
     Example usage of the first-level workflows with enhanced CS- condition grouping.
     
     This demonstrates how to use the workflows for voxel-wise analysis where:
-    1. First trial of CS- conditions is handled as a separate condition (CS-_first)
-    2. All other CS- trials are grouped together as one condition (CS-)
+    1. First trial of CS- conditions is handled as a separate condition (keeps original name)
+    2. All other CS- trials are kept as individual conditions (keeps original names)
     3. All other trial types are handled as individual conditions
     """
     # Example 1: Enhanced CS- condition grouping for voxel-wise analysis
@@ -937,7 +937,7 @@ def example_usage():
     contrasts, cs_first_trial, cs_other_trials, other_conditions = create_contrasts(condition_names, 'standard')
     
     print(f"First trial of CS- condition detected: {cs_first_trial}")
-    print(f"Other CS- trials grouped together: {cs_other_trials}")
+    print(f"Other CS- trials kept as individual conditions: {cs_other_trials}")
     print(f"Other trial types: {other_conditions}")
     print(f"Generated contrasts: {[c[0] for c in contrasts]}")
     
@@ -987,25 +987,25 @@ def example_usage():
     
     print(f"Real event file conditions: {real_conditions}")
     print(f"First trial of CS- condition: {cs_first_trial}")
-    print(f"Other CS- trials grouped: {cs_other_trials}")
+    print(f"Other CS- trials: {cs_other_trials}")
     print(f"Other trial types: {other_conditions}")
-    print(f"Final condition names for contrasts: CS-_first, CS-, CSS, US_CSS, CSR, US_CSR, FIXATION")
+    print(f"Final condition names for contrasts: {cs_first_trial}, {cs_other_trials}, {other_conditions}")
     print(f"Total contrasts generated: {len(contrasts)}")
     
     print("\n=== Summary ===")
     print("The workflows now automatically implement ENHANCED CS- condition grouping:")
-    print("1. Detect the FIRST TRIAL of CS- conditions as 'CS-_first' condition")
-    print("2. Group ALL OTHER CS- trials together as 'CS-' condition")
+    print("1. Detect the FIRST TRIAL of CS- conditions and keep as separate condition")
+    print("2. Keep ALL OTHER CS- trials as INDIVIDUAL conditions")
     print("3. Handle ALL OTHER trial types as INDIVIDUAL conditions")
     print("4. Support multiple trial naming conventions:")
     print("   - CS-US_1, CS-US_2, CS-US_3")
     print("   - CS-US_trial1, CS-US_trial2, CS-US_trial3")
     print("   - CS-US (single condition)")
     print("5. Create contrasts between:")
-    print("   - CS-_first vs CS- vs other conditions")
-    print("   - CS- vs other conditions")
+    print("   - First CS- trial vs other CS- trials vs other conditions")
+    print("   - All CS- trials vs other conditions")
     print("   - All other trial types vs each other")
     print("6. Provide enhanced design matrix configuration for voxel-wise analysis")
     print("7. Support comprehensive logging of enhanced CS- grouping strategy")
     print("8. Enable sophisticated contrast analysis with proper CS- trial separation")
-    print("9. Use intuitive naming: CS-_first (first trial) and CS- (other trials)")
+    print("9. Use original condition names to ensure FSL compatibility")
