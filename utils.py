@@ -32,11 +32,31 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
     import pandas as pd
     from nipype.interfaces.base.support import Bunch
 
-    # Process the events file with tab separator (fix for BIDS TSV files)
-    events = pd.read_csv(events_file, sep='\t')  # Changed from sep=',' to sep='\t'
+    # Process the events file with automatic separator detection
+    events = read_csv_with_detection(events_file)
     print("=== DEBUG: loaded event columns ===")
     print(events.columns.tolist())
     print(events.head())
+
+    # Detect the condition column (try different possible names)
+    condition_column = None
+    possible_columns = ['trial_type', 'condition', 'event_type', 'type', 'stimulus', 'trial']
+    for col in possible_columns:
+        if col in events.columns:
+            condition_column = col
+            break
+    
+    if condition_column is None:
+        # If no standard column found, try to use the first non-numeric column
+        for col in events.columns:
+            if not pd.api.types.is_numeric_dtype(events[col]):
+                condition_column = col
+                break
+    
+    if condition_column is None:
+        raise ValueError(f"Could not find condition column in events file. Available columns: {events.columns.tolist()}")
+    
+    print(f"Using column '{condition_column}' for conditions")
 
     bunch_fields = ['onsets', 'durations', 'amplitudes']
 
@@ -46,7 +66,7 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     out_motion = Path('motion.par').resolve()
 
-    regress_data = pd.read_csv(regressors_file, sep='\t')
+    regress_data = read_csv_with_detection(regressors_file)
     np.savetxt(out_motion, regress_data[motion_columns].values, '%g')
     if regressors_names is None:
         regressors_names = sorted(set(regress_data.columns) - set(motion_columns))
@@ -57,11 +77,11 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
 
     runinfo = Bunch(
         scans=in_file,
-        conditions=list(set(events.trial_type.values)),
+        conditions=list(set(events[condition_column].values)),
         **{k: [] for k in bunch_fields})
 
     for condition in runinfo.conditions:
-        event = events[events.trial_type.str.match(condition)]
+        event = events[events[condition_column].str.match(str(condition))]
 
         runinfo.onsets.append(np.round(event.onset.values, 3).tolist())
         runinfo.durations.append(np.round(event.duration.values, 3).tolist())
@@ -78,7 +98,7 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
             regressors_names = list(set(regressors_names).intersection(
                 set(regress_data.columns)))
             runinfo.regressors = regress_data[regressors_names]
-        runinfo.regressors = runinfo.regressors.fillna(0.0).values.T.tolist()
+        runinfo.regressors = regress_data[regressors_names].fillna(0.0).values.T.tolist()
 
     return [runinfo], str(out_motion)
 
@@ -98,11 +118,11 @@ def _bids2nipypeinfo_lss(in_file, events_file, regressors_file,
         from itertools import product
         motion_columns = ['_'.join(v) for v in product(('trans', 'rot'), 'xyz')]
 
-    # Load events and regressors
-    events = pd.read_csv(events_file)
+    # Load events and regressors with automatic separator detection
+    events = read_csv_with_detection(events_file)
     print("LOADED EVENTS COLUMNS:", events.columns.tolist())
     print(events.head())
-    regress_data = pd.read_csv(regressors_file, sep='\t')
+    regress_data = read_csv_with_detection(regressors_file)
 
     # Locate the trial of interest by ID
     trial = events[events['trial_ID'] == trial_ID]
