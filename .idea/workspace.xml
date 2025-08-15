@@ -5,8 +5,46 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="770ccd83-41a2-43b2-a5c4-0597a81d97db" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/hyak_narsad.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/hyak_narsad.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/run_1st_level.def" beforeDir="false" afterPath="$PROJECT_DIR$/run_1st_level.def" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Creat_LSS_2_slurm_scripts.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Creat_LSS_3_slurm_scripts.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Creat_LSS_3_slurm_scripts_2.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Creat_LSS_slurm_scripts.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Create_group_searchlight.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/LSS_2_cate_all_trials.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/LSS_3_similarity.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/creat_group_level_slurm_scripts.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/creat_group_level_slurm_scripts_onlyPlacebo.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/creat_group_level_slurm_scripts_onlyPlacebo_psy.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/create_1st_LSS.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/create_1st_LSS_2_cateAlltrials.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/create_group_level_slurm_scripts.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/first_LSS_2_cateAlltrials.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/first_level_workflows.py" beforeDir="false" afterPath="$PROJECT_DIR$/first_level_workflows.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/group_searchlight.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_1st_LSS_1st.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_first_level.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_first_level_LSS_1st.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_first_level_Lss_step3.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_first_level_ori.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_group_level.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/launch_group_level_onlyPlacebo.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_1st_level.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_LSS.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_group_level.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_group_level.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_group_level_onlyPlacebo.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_group_level_onlyPlacebo.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level_guess.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level_guess.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level_onlyPlacebo.def" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_pre_group_level_onlyPlacebo.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/similarity_ori.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test_LSS.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/test_minimal_workflow.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -46,25 +84,25 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ASKED_ADD_EXTERNAL_FILES": "true",
-    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "Python.test_LSS.executor": "Run",
-    "Python.test_single_local.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "com.codeium.enabled": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/Users/xiaoqianxiao/PycharmProjects/hyak_narsad",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "preferences.pluginManager",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_ADD_EXTERNAL_FILES&quot;: &quot;true&quot;,
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;Python.test_LSS.executor&quot;: &quot;Run&quot;,
+    &quot;Python.test_single_local.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;com.codeium.enabled&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/xiaoqianxiao/PycharmProjects/hyak_narsad&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.pluginManager&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
@@ -153,7 +191,25 @@
       <workItem from="1747261119162" duration="4721000" />
       <workItem from="1747690993052" duration="36836000" />
       <workItem from="1747850798120" duration="99926000" />
-      <workItem from="1748559848502" duration="20773000" />
+      <workItem from="1748559848502" duration="55235000" />
+      <workItem from="1748875125087" duration="2103000" />
+      <workItem from="1749837292226" duration="1724000" />
+      <workItem from="1749841347118" duration="780000" />
+      <workItem from="1749850913869" duration="80000" />
+      <workItem from="1749936358433" duration="74000" />
+      <workItem from="1749936502935" duration="98000" />
+      <workItem from="1749950986873" duration="242000" />
+      <workItem from="1749954145798" duration="1973000" />
+      <workItem from="1753723767094" duration="21000" />
+      <workItem from="1753723795333" duration="151402000" />
+      <workItem from="1754500013201" duration="16085000" />
+      <workItem from="1754586301698" duration="1015000" />
+      <workItem from="1754591435612" duration="33795000" />
+      <workItem from="1754871546601" duration="4220000" />
+      <workItem from="1754947787790" duration="435000" />
+      <workItem from="1754949012729" duration="150000" />
+      <workItem from="1755040059660" duration="2000" />
+      <workItem from="1755130996833" duration="606000" />
     </task>
     <servers />
   </component>
