@@ -9,24 +9,35 @@ From: narsad-fmri_1st_level_0.0.sif
 
 
 %files
-    run_1st_level.py /app/run_1st_level.py
     first_level_workflows.py /app/first_level_workflows.py
+    group_level_workflows.py /app/group_level_workflows.py
+    create_1st_voxelWise.py /app/create_1st_voxelWise.py
+    create_1st_LSS_1st_singleTrialEstimate.py /app/create_1st_LSS_1st_singleTrialEstimate.py
+    create_1st_LSS_2nd_cateAlltrials.py /app/create_1st_LSS_2nd_cateAlltrials.py
+    create_1st_LSS_3rd_similarity.py /app/create_1st_LSS_3rd_similarity.py
+    create_group_LSS_searchlight.py /app/create_group_LSS_searchlight.py
+    first_LSS_2nd_cateAlltrials.py /app/first_LSS_2nd_cateAlltrials.py
+    first_LSS_3rd_similarity.py /app/first_LSS_3rd_similarity.py
+    group_LSS_searchlight.py /app/group_LSS_searchlight.py
+    run_pre_group_voxelWise.py /app/run_pre_group_voxelWise.py
+    run_group_voxelWise.py /app/run_group_voxelWise.py
+    run_1st_LSS.py /app/run_1st_LSS.py
+    other_tools.py /app/other_tools.py
+    similarity.py /app/similarity.py
     utils.py /app/utils.py
-    run_LSS.py /app/run_LSS.py
-    Creat_LSS_slurm_scripts.py /app/Creat_LSS_slurm_scripts.py
-    Creat_LSS_2_slurm_scripts.py /app/Creat_LSS_2_slurm_scripts.py
-    LSS_2_cate_all_trials.py /app/LSS_2_cate_all_trials.py
+
+
 %post
-    chmod +x /app/run_1st_level.py /app/run_1st_level_single_trial.py /app/Creat_LSS_slurm_scripts.py
+    chmod +x /app/create_1st_voxelWise.py /app/run_pre_group_voxelWise.py /app/create_1st_LSS_1st_singleTrialEstimate.py /app/create_1st_LSS_2nd_cateAlltrials.py /app/create_1st_LSS_3rd_similarity.py /app/create_group_LSS_searchlight.py
 
 %runscript
     #!/bin/bash
     CMD="$1"; shift || true
     case "$CMD" in
       standard)
-        exec python3 /app/run_1st_level.py "$@" ;;
+        exec python3 /app/create_1st_voxelWise.py "$@" ;;
       single_trial)
-        exec python3 /app/run_1st_level_single_trial.py "$@" ;;
+        exec python3 /app/run_pre_group_voxelWise.py "$@" ;;
       *)
         echo "Usage: $(basename $0) {standard|single_trial} [args...]" >&2
         exit 1
