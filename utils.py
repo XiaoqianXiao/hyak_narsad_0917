@@ -33,6 +33,9 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
     from nipype.interfaces.base.support import Bunch
 
     # Process the events file with automatic separator detection
+    # Import the function locally to ensure it's available
+    from utils import read_csv_with_detection
+    
     events = read_csv_with_detection(events_file)
     print("=== DEBUG: loaded event columns ===")
     print(events.columns.tolist())
@@ -119,6 +122,9 @@ def _bids2nipypeinfo_lss(in_file, events_file, regressors_file,
         motion_columns = ['_'.join(v) for v in product(('trans', 'rot'), 'xyz')]
 
     # Load events and regressors with automatic separator detection
+    # Import the function locally to ensure it's available
+    from utils import read_csv_with_detection
+    
     events = read_csv_with_detection(events_file)
     print("LOADED EVENTS COLUMNS:", events.columns.tolist())
     print(events.head())
