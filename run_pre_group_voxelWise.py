@@ -89,7 +89,7 @@ ECR_FILE = os.path.join(SCR_DIR, 'ECR.csv')
 
 # Analysis parameters
 TASKS = ['phase2', 'phase3']
-CONTRAST_RANGE = list(range(1, 32))  # Contrasts 1-31
+CONTRAST_RANGE = list(range(1, 43))  # Contrasts 1-42
 
 # =============================================================================
 # DATA LOADING FUNCTIONS

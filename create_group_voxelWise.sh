@@ -32,7 +32,7 @@ DEFAULT_ANALYSIS_TYPES=("randomise" "flameo")
 
 # Tasks and contrasts
 TASKS=("phase2" "phase3")
-CONTRASTS=$(seq 1 31)
+CONTRASTS=$(seq 1 42)
 
 # =============================================================================
 # CONTAINER PATH
