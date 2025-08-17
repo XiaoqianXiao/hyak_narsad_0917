@@ -134,13 +134,16 @@ def build_query(participant_label=None, run=None, task=None):
 
 def get_condition_names_from_events(events_file):
     """
-    Extract condition names from events file with automatic separator detection.
+    Extract condition names from events file with proper CS- splitting.
+    
+    This function now uses the same logic as utils.py to create 7 conditions
+    by splitting multiple CS- trials into CS-_first and CS-_others.
     
     Args:
         events_file (str): Path to events CSV file
     
     Returns:
-        list: List of condition names
+        list: List of condition names with proper CS- splitting
     """
     try:
         if os.path.exists(events_file):
@@ -149,16 +152,41 @@ def get_condition_names_from_events(events_file):
             events_df = read_csv_with_detection(events_file)
             
             if 'trial_type' in events_df.columns:
-                condition_names = sorted(events_df['trial_type'].unique().tolist())
-                logger.info(f"Extracted {len(condition_names)} conditions from events file")
+                # Get raw conditions and apply CS- splitting logic
+                raw_conditions = list(events_df['trial_type'].values)
+                
+                # Count CS- trials and create proper condition names
+                cs_count = raw_conditions.count('CS-')
+                if cs_count > 1:
+                    # Multiple CS- trials: split into CS-_first and CS-_others
+                    condition_names = ['CS-_first', 'CS-_others']
+                    # Add other unique conditions (excluding CS-)
+                    other_conditions = [c for c in set(raw_conditions) if c != 'CS-']
+                    condition_names.extend(other_conditions)
+                    logger.info(f"Split {cs_count} CS- trials into CS-_first and CS-_others. Total conditions: {len(condition_names)}")
+                else:
+                    # Single or no CS- trials: use original logic
+                    condition_names = sorted(events_df['trial_type'].unique().tolist())
+                    logger.info(f"Using standard conditions: {len(condition_names)} total")
+                
+                logger.info(f"Final condition names: {condition_names}")
                 return condition_names
             else:
                 # If 'trial_type' not found, try alternative column names
                 possible_columns = ['condition', 'event_type', 'type', 'stimulus', 'trial']
                 for col in possible_columns:
                     if col in events_df.columns:
-                        condition_names = sorted(events_df[col].unique().tolist())
-                        logger.info(f"Found alternative column '{col}', extracted {len(condition_names)} conditions")
+                        # Apply same CS- splitting logic to alternative columns
+                        raw_conditions = list(events_df[col].values)
+                        cs_count = raw_conditions.count('CS-')
+                        if cs_count > 1:
+                            condition_names = ['CS-_first', 'CS-_others']
+                            other_conditions = [c for c in set(raw_conditions) if c != 'CS-']
+                            condition_names.extend(other_conditions)
+                            logger.info(f"Split {cs_count} CS- trials into CS-_first and CS-_others using column '{col}'. Total conditions: {len(condition_names)}")
+                        else:
+                            condition_names = sorted(events_df[col].unique().tolist())
+                            logger.info(f"Using standard conditions from column '{col}': {len(condition_names)} total")
                         return condition_names
                 
                 # If no suitable column found, show available columns
@@ -169,8 +197,17 @@ def get_condition_names_from_events(events_file):
                 # If there are only a few columns, try to use the first non-numeric column
                 for col in available_columns:
                     if not pd.api.types.is_numeric_dtype(events_df[col]):
-                        condition_names = sorted(events_df[col].unique().tolist())
-                        logger.info(f"Using first non-numeric column '{col}' as condition names: {condition_names}")
+                        # Apply same CS- splitting logic
+                        raw_conditions = list(events_df[col].values)
+                        cs_count = raw_conditions.count('CS-')
+                        if cs_count > 1:
+                            condition_names = ['CS-_first', 'CS-_others']
+                            other_conditions = [c for c in set(raw_conditions) if c != 'CS-']
+                            condition_names.extend(other_conditions)
+                            logger.info(f"Split {cs_count} CS- trials into CS-_first and CS-_others using first non-numeric column '{col}'. Total conditions: {len(condition_names)}")
+                        else:
+                            condition_names = sorted(events_df[col].unique().tolist())
+                            logger.info(f"Using first non-numeric column '{col}' as condition names: {condition_names}")
                         return condition_names
                 
                 logger.warning("No suitable column found for condition names")

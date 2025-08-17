@@ -69,16 +69,28 @@ def extract_cs_conditions(condition_names):
     cs_other_trials = []
     other_conditions = []
     
+    # Count occurrences of each condition
+    from collections import Counter
+    condition_counts = Counter(condition_names)
+    
+    # Process CS- conditions
+    if 'CS-' in condition_counts:
+        cs_count = condition_counts['CS-']
+        if cs_count > 0:
+            # First occurrence becomes CS-_first
+            cs_first_trial = 'CS-_first'
+            logger.info(f"Found {cs_count} CS- trials, first becomes: {cs_first_trial}")
+            
+            # If there are multiple CS- trials, group the rest
+            if cs_count > 1:
+                # Add the remaining CS- trials to cs_other_trials
+                # We'll use this to create the CS-_others condition
+                cs_other_trials = ['CS-'] * (cs_count - 1)  # Represent remaining trials
+                logger.info(f"Grouping {cs_count - 1} remaining CS- trials into CS-_others")
+    
+    # Process all other conditions
     for condition in condition_names:
-        if condition.startswith('CS-'):
-            if cs_first_trial is None:
-                # First occurrence of CS- becomes CS-_first
-                cs_first_trial = 'CS-_first'  # Rename to indicate first trial
-                logger.info(f"Found first occurrence of CS- condition, renaming to: {cs_first_trial}")
-            else:
-                # All subsequent CS- trials go to CS-_others group
-                cs_other_trials.append(condition)
-        else:
+        if not condition.startswith('CS-'):
             other_conditions.append(condition)
     
     if cs_first_trial:

@@ -78,20 +78,72 @@ def _bids2nipypeinfo(in_file, events_file, regressors_file,
         bunch_fields += ['regressor_names']
         bunch_fields += ['regressors']
 
+    # Create conditions list with proper CS- splitting
+    raw_conditions = list(events[condition_column].values)
+    
+    # Count CS- trials and create proper condition names
+    cs_count = raw_conditions.count('CS-')
+    if cs_count > 1:
+        # Multiple CS- trials: split into CS-_first and CS-_others
+        conditions = ['CS-_first', 'CS-_others']
+        # Add other unique conditions (excluding CS-)
+        other_conditions = [c for c in set(raw_conditions) if c != 'CS-']
+        conditions.extend(other_conditions)
+        print(f"Split {cs_count} CS- trials into CS-_first and CS-_others. Total conditions: {len(conditions)}")
+    else:
+        # Single or no CS- trials: use original logic
+        conditions = list(set(raw_conditions))
+        print(f"Using standard conditions: {len(conditions)} total")
+    
     runinfo = Bunch(
         scans=in_file,
-        conditions=list(set(events[condition_column].values)),
+        conditions=conditions,
         **{k: [] for k in bunch_fields})
 
     for condition in runinfo.conditions:
-        event = events[events[condition_column].str.match(str(condition))]
-
-        runinfo.onsets.append(np.round(event.onset.values, 3).tolist())
-        runinfo.durations.append(np.round(event.duration.values, 3).tolist())
-        if 'amplitudes' in events.columns:
-            runinfo.amplitudes.append(np.round(event.amplitudes.values, 3).tolist())
+        if condition == 'CS-_first':
+            # First CS- trial: get the first occurrence
+            cs_events = events[events[condition_column] == 'CS-']
+            if len(cs_events) > 0:
+                first_cs = cs_events.iloc[0:1]  # Get first CS- trial
+                runinfo.onsets.append(np.round(first_cs.onset.values, 3).tolist())
+                runinfo.durations.append(np.round(first_cs.duration.values, 3).tolist())
+                if 'amplitudes' in events.columns:
+                    runinfo.amplitudes.append(np.round(first_cs.amplitudes.values, 3).tolist())
+                else:
+                    runinfo.amplitudes.append([amplitude] * len(first_cs))
+            else:
+                # Fallback if no CS- trials found
+                runinfo.onsets.append([])
+                runinfo.durations.append([])
+                runinfo.amplitudes.append([])
+                
+        elif condition == 'CS-_others':
+            # Other CS- trials: get all except the first
+            cs_events = events[events[condition_column] == 'CS-']
+            if len(cs_events) > 1:
+                other_cs = cs_events.iloc[1:]  # Get all CS- trials except first
+                runinfo.onsets.append(np.round(other_cs.onset.values, 3).tolist())
+                runinfo.durations.append(np.round(other_cs.duration.values, 3).tolist())
+                if 'amplitudes' in events.columns:
+                    runinfo.amplitudes.append(np.round(other_cs.amplitudes.values, 3).tolist())
+                else:
+                    runinfo.amplitudes.append([amplitude] * len(other_cs))
+            else:
+                # Fallback if only 1 CS- trial
+                runinfo.onsets.append([])
+                runinfo.durations.append([])
+                runinfo.amplitudes.append([])
+                
         else:
-            runinfo.amplitudes.append([amplitude] * len(event))
+            # Regular condition: use original logic
+            event = events[events[condition_column].str.match(str(condition))]
+            runinfo.onsets.append(np.round(event.onset.values, 3).tolist())
+            runinfo.durations.append(np.round(event.duration.values, 3).tolist())
+            if 'amplitudes' in events.columns:
+                runinfo.amplitudes.append(np.round(event.amplitudes.values, 3).tolist())
+            else:
+                runinfo.amplitudes.append([amplitude] * len(event))
 
     if 'regressor_names' in bunch_fields:
         runinfo.regressor_names = regressors_names
