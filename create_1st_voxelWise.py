@@ -160,10 +160,14 @@ def get_condition_names_from_events(events_file):
                 if cs_count > 1:
                     # Multiple CS- trials: split into CS-_first and CS-_others
                     condition_names = ['CS-_first', 'CS-_others']
-                    # Add other unique conditions (excluding CS-)
+                    # Add other unique conditions (excluding ONLY the exact 'CS-' condition)
                     other_conditions = [c for c in set(raw_conditions) if c != 'CS-']
                     condition_names.extend(other_conditions)
                     logger.info(f"Split {cs_count} CS- trials into CS-_first and CS-_others. Total conditions: {len(condition_names)}")
+                    logger.info(f"Raw conditions: {raw_conditions}")
+                    logger.info(f"Unique conditions: {list(set(raw_conditions))}")
+                    logger.info(f"Other conditions found: {other_conditions}")
+                    logger.info(f"Final condition names: {condition_names}")
                 else:
                     # Single or no CS- trials: use original logic
                     condition_names = sorted(events_df['trial_type'].unique().tolist())

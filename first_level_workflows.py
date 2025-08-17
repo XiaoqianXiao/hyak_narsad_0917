@@ -53,50 +53,38 @@ def extract_cs_conditions(condition_names):
     """
     Extract and group CS- conditions from a list of condition names.
     
-    This function identifies the first occurrence of CS- conditions as CS-_first and groups 
-    all subsequent CS- trials as CS-_others, while keeping other trial types as individual conditions.
+    This function identifies CS-_first and CS-_others conditions that were already created
+    by the earlier processing, and separates them from other trial types.
     
     Args:
-        condition_names (list): List of condition names
+        condition_names (list): List of condition names (already processed with CS-_first, CS-_others)
     
     Returns:
         tuple: (cs_first_trial, cs_other_trials, other_conditions)
-            - cs_first_trial: The first occurrence of CS- conditions (renamed to CS-_first)
-            - cs_other_trials: List of all subsequent CS- trials (grouped as CS-_others)
+            - cs_first_trial: The CS-_first condition if found
+            - cs_other_trials: The CS-_others condition if found
             - other_conditions: List of non-CS conditions
     """
     cs_first_trial = None
     cs_other_trials = []
     other_conditions = []
     
-    # Count occurrences of each condition
-    from collections import Counter
-    condition_counts = Counter(condition_names)
+    # Check if CS-_first and CS-_others are already in the condition names
+    if 'CS-_first' in condition_names:
+        cs_first_trial = 'CS-_first'
+        logger.info(f"Found CS-_first condition")
     
-    # Process CS- conditions
-    if 'CS-' in condition_counts:
-        cs_count = condition_counts['CS-']
-        if cs_count > 0:
-            # First occurrence becomes CS-_first
-            cs_first_trial = 'CS-_first'
-            logger.info(f"Found {cs_count} CS- trials, first becomes: {cs_first_trial}")
-            
-            # If there are multiple CS- trials, group the rest
-            if cs_count > 1:
-                # Add the remaining CS- trials to cs_other_trials
-                # We'll use this to create the CS-_others condition
-                cs_other_trials = ['CS-'] * (cs_count - 1)  # Represent remaining trials
-                logger.info(f"Grouping {cs_count - 1} remaining CS- trials into CS-_others")
+    if 'CS-_others' in condition_names:
+        cs_other_trials = ['CS-_others']  # Represent as list for consistency
+        logger.info(f"Found CS-_others condition")
     
-    # Process all other conditions
+    # Process all other conditions (non-CS conditions)
     for condition in condition_names:
-        if not condition.startswith('CS-'):
+        if condition not in ['CS-_first', 'CS-_others']:
             other_conditions.append(condition)
     
-    if cs_first_trial:
-        logger.info(f"First trial of CS- condition '{cs_first_trial}' identified as separate condition")
-        if cs_other_trials:
-            logger.info(f"Other CS- trials grouped together: {cs_other_trials}")
+    if cs_first_trial or cs_other_trials:
+        logger.info(f"CS- conditions identified: {cs_first_trial}, {cs_other_trials}")
         logger.info(f"Other trial types as individual conditions: {other_conditions}")
     else:
         logger.info(f"No CS- conditions found. All conditions: {other_conditions}")
