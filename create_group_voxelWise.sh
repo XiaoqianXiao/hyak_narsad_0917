@@ -32,7 +32,24 @@ DEFAULT_ANALYSIS_TYPES=("randomise" "flameo")
 
 # Tasks and contrasts
 TASKS=("phase2" "phase3")
-CONTRASTS=$(seq 1 42)
+
+# Dynamic contrast ranges based on task
+# Phase 2: 8 conditions → 56 contrasts (8 × 7)
+# Phase 3: 6 conditions → 30 contrasts (6 × 5)
+get_contrast_range() {
+    local task="$1"
+    case "$task" in
+        "phase2")
+            echo "$(seq 1 56)"  # 8 conditions → 56 contrasts
+            ;;
+        "phase3")
+            echo "$(seq 1 30)"  # 6 conditions → 30 contrasts
+            ;;
+        *)
+            echo "$(seq 1 42)"  # Default fallback
+            ;;
+    esac
+}
 
 # =============================================================================
 # CONTAINER PATH
@@ -227,6 +244,10 @@ echo "Creating SLURM scripts in: $SCRIPT_DIR"
 # Generate SLURM scripts
 SCRIPT_COUNT=0
 for task in "${TASKS[@]}"; do
+    # Get dynamic contrast range for this task
+    CONTRASTS=$(get_contrast_range "$task")
+    echo "Generating scripts for task: $task (contrasts: $CONTRASTS)"
+    
     for contrast in $CONTRASTS; do
         for analysis_type in "${ANALYSIS_TYPES[@]}"; do
             # Create job name

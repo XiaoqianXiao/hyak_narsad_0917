@@ -89,6 +89,28 @@ ECR_FILE = os.path.join(SCR_DIR, 'ECR.csv')
 
 # Analysis parameters
 TASKS = ['phase2', 'phase3']
+
+def get_contrast_range(task):
+    """
+    Get dynamic contrast range based on task.
+    
+    Args:
+        task (str): Task name ('phase2' or 'phase3')
+    
+    Returns:
+        list: Range of contrast numbers
+    """
+    if task == 'phase2':
+        # Phase 2: 8 conditions → 56 contrasts (8 × 7)
+        return list(range(1, 57))
+    elif task == 'phase3':
+        # Phase 3: 6 conditions → 30 contrasts (6 × 5)
+        return list(range(1, 31))
+    else:
+        # Default fallback
+        return list(range(1, 43))
+
+# Default contrast range (will be overridden per task)
 CONTRAST_RANGE = list(range(1, 43))  # Contrasts 1-42
 
 # =============================================================================
@@ -477,8 +499,12 @@ Examples:
                 shutil.rmtree(task_workflow_dir)
             Path(task_workflow_dir).mkdir(parents=True, exist_ok=True)
             
+            # Get dynamic contrast range for this task
+            task_contrast_range = get_contrast_range(task)
+            logger.info(f"Task {task}: Processing contrasts {task_contrast_range[0]}-{task_contrast_range[-1]} (total: {len(task_contrast_range)})")
+            
             # Process each contrast
-            for contrast in CONTRAST_RANGE:
+            for contrast in task_contrast_range:
                 logger.info(f"Processing contrast {contrast}")
                 
                 # Create contrast directories
