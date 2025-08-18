@@ -385,27 +385,36 @@ def main():
     """Main execution function."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description="Generic pre-group level fMRI analysis pipeline for NARSAD project",
+        description="Generic pre-group level fMRI analysis pipeline for NARSAD project. Can process all subjects/phases or specific subjects/phases.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Filter by drug condition
-  python run_pre_group_level.py --filter-column Drug --filter-value Placebo
+  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo
   
   # Filter by group
-  python run_pre_group_level.py --filter-column group --filter-value Patients
+  python run_pre_group_voxelWise.py --filter-column group --filter-value Patients
   
   # Filter by guess condition
-  python run_pre_group_level.py --filter-column guess --filter-value High
+  python run_pre_group_voxelWise.py --filter-column guess --filter-value High
   
   # Specify which columns to include
-  python run_pre_group_level.py --filter-column Drug --filter-value Placebo --include-columns group_id,drug_id
+  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --include-columns group_id,drug_id
   
   # Custom output directory
-  python run_pre_group_level.py --filter-column Drug --filter-value Placebo --output-dir /custom/path
+  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --output-dir /custom/path
   
-  # No filtering (all subjects)
-  python run_pre_group_level.py
+  # Process specific subject and phase
+  python run_pre_group_voxelWise.py --subject sub-001 --phase phase2
+  
+  # Process specific subject for all phases
+  python run_pre_group_voxelWise.py --subject sub-001
+  
+  # Process specific phase for all subjects
+  python run_pre_group_voxelWise.py --phase phase3
+  
+  # No filtering (all subjects, all phases)
+  python run_pre_group_voxelWise.py
         """
     )
     
@@ -437,6 +446,18 @@ Examples:
         '--workflow-dir',
         type=str,
         help='Custom workflow directory (overrides default)'
+    )
+    
+    parser.add_argument(
+        '--subject',
+        type=str,
+        help='Specific subject ID to process (e.g., sub-001)'
+    )
+    
+    parser.add_argument(
+        '--phase',
+        choices=['phase2', 'phase3'],
+        help='Specific phase to process'
     )
     
     args = parser.parse_args()
@@ -487,12 +508,30 @@ Examples:
             logger.error("No subjects found after filtering. Check your filter criteria.")
             return 1
         
+        # Determine which tasks to process
+        if args.phase:
+            tasks_to_process = [args.phase]
+            logger.info(f"Processing specific phase: {args.phase}")
+        else:
+            tasks_to_process = TASKS
+            logger.info("Processing all phases")
+        
         # Process each task
-        for task in TASKS:
+        for task in tasks_to_process:
             logger.info(f"Processing task: {task}")
             
             # Filter subjects for this task
             task_group_info_df = filter_subjects_for_task(subject_list, task, df_behav)
+            
+            # If specific subject requested, filter to that subject
+            if args.subject:
+                if args.subject in task_group_info_df['subID'].values:
+                    task_group_info_df = task_group_info_df[task_group_info_df['subID'] == args.subject]
+                    logger.info(f"Processing single subject: {args.subject}")
+                else:
+                    logger.warning(f"Subject {args.subject} not found in task {task}, skipping")
+                    continue
+            
             group_info = list(task_group_info_df[final_include_columns].itertuples(index=False, name=None))
             expected_subjects = len(group_info)
             
