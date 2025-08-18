@@ -339,16 +339,62 @@ Examples:
     
     args = parser.parse_args()
     
-    # Set script directory
+    # Ensure output directory is absolute
+    if not Path(args.output_dir).is_absolute():
+        args.output_dir = str(Path(args.output_dir).resolve())
+    
+    # Check if we're running in a container and adjust paths if needed
+    container_env = os.getenv('CONTAINER', 'false')
+    if container_env == 'true' or os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv'):
+        logger.info("Detected container environment")
+        # In container, prefer /tmp for script generation if output dir is read-only
+        if not os.access(os.path.dirname(args.output_dir), os.W_OK):
+            logger.warning("Output directory parent is not writable, will use /tmp for scripts")
+    
+    # Set script directory - ensure it's always an absolute path
     if args.script_dir:
-        script_dir = Path(args.script_dir)
+        script_dir = Path(args.script_dir).resolve()
     else:
         # Auto-generate script directory based on output directory
-        script_dir = Path(args.output_dir).parent / 'slurm_scripts' / 'pre_group'
+        script_dir = Path(args.output_dir).resolve().parent / 'slurm_scripts' / 'pre_group'
+    
+    # Ensure script directory is absolute and in a writable location
+    if not script_dir.is_absolute():
+        script_dir = script_dir.resolve()
+    
+    logger.info(f"Script directory: {script_dir}")
+    logger.info(f"Current working directory: {os.getcwd()}")
+    logger.info(f"Output directory: {args.output_dir}")
     
     if not args.dry_run:
-        script_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"Created script directory: {script_dir}")
+        try:
+            script_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Created script directory: {script_dir}")
+        except OSError as e:
+            if "Read-only file system" in str(e) or "Permission denied" in str(e):
+                # Try multiple fallback locations
+                fallback_locations = [
+                    Path("/tmp") / "nipype_slurm_scripts" / "pre_group",
+                    Path("/tmp") / "narsad_slurm_scripts" / "pre_group",
+                    Path("/scrubbed_dir") / "temp_slurm_scripts" / "pre_group"
+                ]
+                
+                for fallback_dir in fallback_locations:
+                    try:
+                        fallback_dir.mkdir(parents=True, exist_ok=True)
+                        script_dir = fallback_dir
+                        logger.warning(f"Target directory read-only, using fallback: {script_dir}")
+                        break
+                    except OSError:
+                        continue
+                else:
+                    # If all fallbacks fail, use current directory with a unique name
+                    import uuid
+                    script_dir = Path.cwd() / f"slurm_scripts_{uuid.uuid4().hex[:8]}" / "pre_group"
+                    script_dir.mkdir(parents=True, exist_ok=True)
+                    logger.warning(f"All fallbacks failed, using current directory: {script_dir}")
+            else:
+                raise
     
     # Get SLURM parameters
     slurm_params = {

@@ -163,6 +163,12 @@ cat pre_group_sub-001_phase2_12345.err
 - `/gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir` - Scrub directory
 - `/gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad:/app/updated` - Updated code
 
+### Container Environment Handling
+The script automatically detects when running in a container and handles read-only filesystem issues:
+- **Automatic fallback**: If target directories are read-only, scripts are saved to writable locations
+- **Fallback locations**: `/tmp`, `/scrubbed_dir`, or current directory with unique names
+- **Path resolution**: Ensures all paths are absolute and container-compatible
+
 ## Output Structure
 
 The pipeline generates output in the following structure:
@@ -195,6 +201,7 @@ The pipeline generates output in the following structure:
 2. **Missing phases**: Verify phase directories exist
 3. **SLURM failures**: Check job logs in `logs/` directory
 4. **Container issues**: Verify container path and bind mounts
+5. **Read-only filesystem**: Script automatically falls back to writable locations (`/tmp`, `/scrubbed_dir`)
 
 ## Performance Benefits
 
