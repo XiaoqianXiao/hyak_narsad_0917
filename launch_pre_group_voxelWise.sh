@@ -114,9 +114,13 @@ echo "Derivatives directory: $DERIVATIVES_DIR"
 
 # Build command for script generator
 CMD="python3 create_pre_group_voxelWise.py"
-CMD="$CMD --output-dir '$OUTPUT_DIR'"
 CMD="$CMD --script-dir '$SCRIPT_DIR'"
 CMD="$CMD --derivatives-dir '$DERIVATIVES_DIR'"
+
+# Only add output-dir if it's different from default
+if [[ "$OUTPUT_DIR" != "/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel" ]]; then
+    CMD="$CMD --output-dir '$OUTPUT_DIR'"
+fi
 
 if [[ -n "$SUBJECTS" ]]; then
     CMD="$CMD --subjects '$SUBJECTS'"

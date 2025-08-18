@@ -6,6 +6,65 @@ This script generates individual SLURM scripts for each subject and phase,
 allowing parallel processing of the pre-group level analysis.
 
 Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
+
+USAGE:
+    # Create scripts for all subjects and phases (uses default output directory)
+    python3 create_pre_group_voxelWise.py
+    
+    # Create scripts for specific subjects
+    python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002
+    
+    # Create scripts for specific phases
+    python3 create_pre_group_voxelWise.py --phases phase2,phase3
+    
+    # Create scripts for specific subjects and phases
+    python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002 --phases phase2
+    
+    # Custom SLURM parameters
+    python3 create_pre_group_voxelWise.py --time 08:00:00 --mem 64G --partition ckpt-all
+    
+    # Custom script directory
+    python3 create_pre_group_voxelWise.py --script-dir /custom/script/path
+    
+    # Custom output directory
+    python3 create_pre_group_voxelWise.py --output-dir /custom/path
+    
+    # Dry run to see what would be created
+    python3 create_pre_group_voxelWise.py --dry-run
+    
+    # Show help
+    python3 create_pre_group_voxelWise.py --help
+
+EXAMPLES:
+    # Quick start with defaults (uses default output directory)
+    python3 create_pre_group_voxelWise.py
+    
+    # Process only Phase 2 data
+    python3 create_pre_group_voxelWise.py --phases phase2
+    
+    # Process specific subjects with custom resources
+    python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002 --time 06:00:00 --mem 48G
+    
+    # Test with dry run first
+    python3 create_pre_group_voxelWise.py --dry-run
+    
+    # Custom output directory
+    python3 create_pre_group_voxelWise.py --output-dir /custom/path
+
+SLURM PARAMETERS:
+    --partition: SLURM partition (default: ckpt-all)
+    --account: SLURM account (default: fang)
+    --time: Time limit (default: 04:00:00)
+    --mem: Memory limit (default: 32G)
+    --cpus-per-task: CPUs per task (default: 4)
+    --container: Container image (default: narsad-fmri_1st_level_1.0.sif)
+
+OUTPUT:
+    Creates SLURM scripts in script_dir:
+    - pre_group_sub-XXX_phaseY.sh (individual job scripts)
+    - launch_all_pre_group.sh (launch all jobs)
+    - monitor_jobs.sh (monitor job progress)
+    - logs/ directory for job outputs
 """
 
 import os
@@ -177,21 +236,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Create scripts for all subjects and phases
-  python create_pre_group_voxelWise.py --output-dir /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel
+  # Create scripts for all subjects and phases (uses default output directory)
+  python create_pre_group_voxelWise.py
+  
+  # Create scripts with custom output directory
+  python create_pre_group_voxelWise.py --output-dir /custom/path
   
   # Create scripts with custom SLURM parameters
-  python create_pre_group_voxelWise.py --output-dir /custom/path --time 08:00:00 --mem 64G
+  python create_pre_group_voxelWise.py --time 08:00:00 --mem 64G
   
   # Create scripts for specific subjects only
-  python create_pre_group_voxelWise.py --output-dir /custom/path --subjects sub-001,sub-002
+  python create_pre_group_voxelWise.py --subjects sub-001,sub-002
         """
     )
     
     parser.add_argument(
         '--output-dir',
-        required=True,
-        help='Output directory for pre-group analysis results'
+        default='/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel',
+        help='Output directory for pre-group analysis results (default: /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel)'
     )
     
     parser.add_argument(
