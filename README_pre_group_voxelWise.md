@@ -82,6 +82,9 @@ bash launch_pre_group_voxelWise.sh --data-source placebo --subjects sub-001,sub-
 # Custom time and memory limits
 bash launch_pre_group_voxelWise.sh --time 08:00:00 --mem 64G
 
+# Custom work directory
+bash launch_pre_group_voxelWise.sh --workdir /custom/workdir
+
 # Custom script directory
 bash launch_pre_group_voxelWise.sh --script-dir /custom/script/path
 ```
@@ -112,7 +115,7 @@ python3 run_pre_group_voxelWise.py \
 Generated scripts are organized as follows:
 
 ```
-slurm_scripts/pre_group/
+$workdir/pregroup/
 ├── pre_group_sub-001_phase2.sh      # Individual job script
 ├── pre_group_sub-001_phase3.sh      # Individual job script
 ├── pre_group_sub-002_phase2.sh      # Individual job script
@@ -133,14 +136,14 @@ slurm_scripts/pre_group/
 squeue -u $USER --name="pre_group_*"
 
 # Check job counts
-cd slurm_scripts/pre_group
+cd $workdir/pregroup
 bash monitor_jobs.sh
 ```
 
 ### View Logs
 ```bash
 # Check recent logs
-cd slurm_scripts/pre_group/logs
+cd $workdir/pregroup/logs
 ls -la pre_group_*.out | tail -5
 
 # View specific job log

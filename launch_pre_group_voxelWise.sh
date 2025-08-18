@@ -36,6 +36,7 @@ OUTPUT_DIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel"
 SCRIPT_DIR=""
 DERIVATIVES_DIR="/gscratch/fang/NARSAD/MRI/derivatives"
 DATA_SOURCE="all"
+WORKDIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -50,6 +51,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --derivatives-dir)
             DERIVATIVES_DIR="$2"
+            shift 2
+            ;;
+        --workdir)
+            WORKDIR="$2"
             shift 2
             ;;
         --subjects)
@@ -83,6 +88,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --output-dir DIR      Output directory for results (default: $OUTPUT_DIR)"
             echo "  --script-dir DIR      Directory for SLURM scripts (default: $SCRIPT_DIR)"
             echo "  --derivatives-dir DIR Derivatives directory (default: $DERIVATIVES_DIR)"
+            echo "  --workdir DIR         Work directory for scripts (default: $WORKDIR)"
             echo "  --subjects LIST       Comma-separated list of subjects (e.g., sub-001,sub-002)"
             echo "  --phases LIST         Comma-separated list of phases (e.g., phase2,phase3)"
             echo "  --data-source TYPE    Data source: all, placebo, or guess (default: all)"
@@ -118,6 +124,7 @@ done
 
 echo "=== Pre-group Voxel-wise Analysis Launcher ==="
 echo "Output directory: $OUTPUT_DIR"
+echo "Work directory: $WORKDIR"
 echo "Script directory: $SCRIPT_DIR"
 echo "Derivatives directory: $DERIVATIVES_DIR"
 echo "Data source: $DATA_SOURCE"
@@ -126,6 +133,11 @@ echo "Data source: $DATA_SOURCE"
 CMD="python3 create_pre_group_voxelWise.py"
 CMD="$CMD --script-dir '$SCRIPT_DIR'"
 CMD="$CMD --derivatives-dir '$DERIVATIVES_DIR'"
+
+# Add workdir if specified
+if [[ -n "$WORKDIR" ]]; then
+    CMD="$CMD --workdir '$WORKDIR'"
+fi
 
 # Only add output-dir if it's different from default
 if [[ "$OUTPUT_DIR" != "/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel" ]]; then

@@ -29,6 +29,9 @@ USAGE:
     # Custom script directory
     python3 create_pre_group_voxelWise.py --script-dir /custom/script/path
     
+    # Custom work directory
+    python3 create_pre_group_voxelWise.py --workdir /custom/workdir
+    
     # Custom output directory
     python3 create_pre_group_voxelWise.py --output-dir /custom/path
     
@@ -53,6 +56,9 @@ EXAMPLES:
     
     # Process guess data for specific subjects
     python3 create_pre_group_voxelWise.py --data-source guess --subjects sub-001,sub-002
+    
+    # Custom work directory
+    python3 create_pre_group_voxelWise.py --workdir /custom/workdir
     
     # Test with dry run first
     python3 create_pre_group_voxelWise.py --dry-run
@@ -284,6 +290,11 @@ Examples:
     )
     
     parser.add_argument(
+        '--workdir',
+        help='Work directory for scripts (default: auto-generated based on output-dir)'
+    )
+    
+    parser.add_argument(
         '--subjects',
         help='Comma-separated list of specific subjects to process (e.g., sub-001,sub-002)'
     )
@@ -354,9 +365,13 @@ Examples:
     # Set script directory - ensure it's always an absolute path
     if args.script_dir:
         script_dir = Path(args.script_dir).resolve()
+    elif args.workdir:
+        # Use specified workdir/pregroup structure
+        script_dir = Path(args.workdir).resolve() / 'pregroup'
     else:
         # Auto-generate script directory based on output directory
-        script_dir = Path(args.output_dir).resolve().parent / 'slurm_scripts' / 'pre_group'
+        # Use $workdir/pregroup structure
+        script_dir = Path(args.output_dir).resolve().parent / 'pregroup'
     
     # Ensure script directory is absolute and in a writable location
     if not script_dir.is_absolute():
@@ -374,9 +389,9 @@ Examples:
             if "Read-only file system" in str(e) or "Permission denied" in str(e):
                 # Try multiple fallback locations
                 fallback_locations = [
-                    Path("/tmp") / "nipype_slurm_scripts" / "pre_group",
-                    Path("/tmp") / "narsad_slurm_scripts" / "pre_group",
-                    Path("/scrubbed_dir") / "temp_slurm_scripts" / "pre_group"
+                    Path("/tmp") / "narsad_slurm_scripts" / "pregroup",
+                    Path("/tmp") / "nipype_slurm_scripts" / "pregroup",
+                    Path("/scrubbed_dir") / "temp_slurm_scripts" / "pregroup"
                 ]
                 
                 for fallback_dir in fallback_locations:
@@ -390,7 +405,7 @@ Examples:
                 else:
                     # If all fallbacks fail, use current directory with a unique name
                     import uuid
-                    script_dir = Path.cwd() / f"slurm_scripts_{uuid.uuid4().hex[:8]}" / "pre_group"
+                    script_dir = Path.cwd() / f"slurm_scripts_{uuid.uuid4().hex[:8]}" / "pregroup"
                     script_dir.mkdir(parents=True, exist_ok=True)
                     logger.warning(f"All fallbacks failed, using current directory: {script_dir}")
             else:
