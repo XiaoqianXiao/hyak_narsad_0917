@@ -39,9 +39,14 @@ from templateflow.api import get as tpl_get, templates as get_tpl_list
 
 # Configure Nipype crash directory to a writable location
 import nipype
+import os
+
+# Set crash directory to a writable location
+os.environ['NIPYPE_CRASH_DIR'] = '/tmp/nipype_crashes'
 nipype.config.set('execution', 'crashfile_format', 'txt')
 nipype.config.set('execution', 'crash_dir', '/tmp/nipype_crashes')
 nipype.config.set('execution', 'remove_unnecessary_outputs', 'false')
+nipype.config.set('execution', 'crashfile_format', 'txt')
 
 # Configure logging
 logging.basicConfig(

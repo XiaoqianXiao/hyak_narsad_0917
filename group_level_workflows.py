@@ -742,19 +742,34 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         factor_values = group_info[factor_name].values
         factor_levels[factor_name] = sorted(set(factor_values))
     
-    # Create design matrix
+    # Create design matrix - simplified version for now
     if n_factors == 1:
         # Single factor (e.g., two-group comparison)
         design_matrix, contrasts = create_single_factor_design(group_info, factor_levels, column_names)
     elif n_factors == 2:
         # Two factors (e.g., 2x2 factorial)
         design_matrix, contrasts = create_two_factor_design(group_info, factor_levels, column_names, contrast_type)
-    elif n_factors == 3:
-        # Three factors (e.g., 2x2x2 factorial)
-        design_matrix, contrasts = create_three_factor_design(group_info, factor_levels, column_names, contrast_type)
     else:
-        # General factorial design
-        design_matrix, contrasts = create_general_factorial_design(group_info, factor_levels, column_names, contrast_type)
+        # For 3+ factors, use a simple approach
+        # Create a simple design matrix with one column per factor level
+        design_matrix = []
+        for i in range(n):
+            row = []
+            for factor_name in factor_columns:
+                factor_value = group_info[factor_name].iloc[i]
+                # Create dummy coding (1 for first level, 0 for others)
+                if factor_value == factor_levels[factor_name][0]:
+                    row.append(1)
+                else:
+                    row.append(0)
+            design_matrix.append(row)
+        
+        # Create simple contrasts (main effects)
+        contrasts = []
+        for i, factor_name in enumerate(factor_columns):
+            contrast = [0] * n_factors
+            contrast[i] = 1
+            contrasts.append(contrast)
     
     # Write design files
     num_evs = len(design_matrix[0])
