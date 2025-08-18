@@ -60,6 +60,22 @@ bash launch_pre_group_voxelWise.sh --phases phase2
 bash launch_pre_group_voxelWise.sh --subjects sub-001,sub-002 --phases phase2,phase3
 ```
 
+### Data Source Filtering
+
+```bash
+# Process all data sources (default)
+bash launch_pre_group_voxelWise.sh
+
+# Process only placebo data
+bash launch_pre_group_voxelWise.sh --data-source placebo
+
+# Process only guess data
+bash launch_pre_group_voxelWise.sh --data-source guess
+
+# Process specific data source for specific subjects
+bash launch_pre_group_voxelWise.sh --data-source placebo --subjects sub-001,sub-002
+```
+
 ### Custom SLURM Parameters
 
 ```bash
@@ -83,6 +99,12 @@ python3 run_pre_group_voxelWise.py \
 python3 run_pre_group_voxelWise.py \
     --output-dir /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel \
     --subject sub-001
+
+# Process single subject with specific data source
+python3 run_pre_group_voxelWise.py \
+    --output-dir /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel \
+    --subject sub-001 \
+    --data-source placebo
 ```
 
 ## SLURM Script Structure

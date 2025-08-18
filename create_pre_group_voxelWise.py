@@ -20,6 +20,9 @@ USAGE:
     # Create scripts for specific subjects and phases
     python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002 --phases phase2
     
+    # Create scripts for specific data source
+    python3 create_pre_group_voxelWise.py --data-source placebo
+    
     # Custom SLURM parameters
     python3 create_pre_group_voxelWise.py --time 08:00:00 --mem 64G --partition ckpt-all
     
@@ -44,6 +47,12 @@ EXAMPLES:
     
     # Process specific subjects with custom resources
     python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002 --time 06:00:00 --mem 48G
+    
+    # Process placebo data only
+    python3 create_pre_group_voxelWise.py --data-source placebo
+    
+    # Process guess data for specific subjects
+    python3 create_pre_group_voxelWise.py --data-source guess --subjects sub-001,sub-002
     
     # Test with dry run first
     python3 create_pre_group_voxelWise.py --dry-run
@@ -99,7 +108,7 @@ def get_subject_list(derivatives_dir):
                     subjects.append((item, phase))
     return subjects
 
-def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params):
+def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, data_source):
     """Create a SLURM script for a specific subject and phase."""
     
     script_name = f"pre_group_{subject}_{phase}.sh"
@@ -146,7 +155,7 @@ apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
     --output-dir {output_dir} \\
     --subject {subject} \\
     --phase {phase} \\
-    --data-source all
+    --data-source {data_source}
 
 echo "Completed pre-group analysis for {subject} - {phase}"
 """
@@ -160,7 +169,7 @@ echo "Completed pre-group analysis for {subject} - {phase}"
     
     return script_path
 
-def create_launch_script(script_dir, output_dir, slurm_params):
+def create_launch_script(script_dir, output_dir, slurm_params, data_source):
     """Create a launch script to submit all jobs."""
     
     launch_script_path = os.path.join(script_dir, "launch_all_pre_group.sh")
@@ -258,8 +267,14 @@ Examples:
     
     parser.add_argument(
         '--script-dir',
-        default='./slurm_scripts/pre_group',
-        help='Directory to save SLURM scripts (default: ./slurm_scripts/pre_group)'
+        help='Directory to save SLURM scripts (default: auto-generated based on output-dir)'
+    )
+    
+    parser.add_argument(
+        '--data-source',
+        choices=['all', 'placebo', 'guess'],
+        default='all',
+        help='Data source to process (default: all)'
     )
     
     parser.add_argument(
@@ -324,8 +339,13 @@ Examples:
     
     args = parser.parse_args()
     
-    # Create script directory
-    script_dir = Path(args.script_dir)
+    # Set script directory
+    if args.script_dir:
+        script_dir = Path(args.script_dir)
+    else:
+        # Auto-generate script directory based on output directory
+        script_dir = Path(args.output_dir).parent / 'slurm_scripts' / 'pre_group'
+    
     if not args.dry_run:
         script_dir.mkdir(parents=True, exist_ok=True)
         logger.info(f"Created script directory: {script_dir}")
@@ -372,12 +392,12 @@ Examples:
     # Create individual SLURM scripts
     created_scripts = []
     for subject, phase in subject_phase_pairs:
-        script_path = create_slurm_script(subject, phase, args.output_dir, script_dir, slurm_params)
+        script_path = create_slurm_script(subject, phase, args.output_dir, script_dir, slurm_params, args.data_source)
         created_scripts.append(script_path)
         logger.info(f"Created: {script_path}")
     
     # Create launch script
-    launch_script = create_launch_script(script_dir, args.output_dir, slurm_params)
+    launch_script = create_launch_script(script_dir, args.output_dir, slurm_params, args.data_source)
     logger.info(f"Created: {launch_script}")
     
     # Create monitor script

@@ -33,8 +33,9 @@ set -e
 
 # Default parameters
 OUTPUT_DIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel"
-SCRIPT_DIR="./slurm_scripts/pre_group"
+SCRIPT_DIR=""
 DERIVATIVES_DIR="/gscratch/fang/NARSAD/MRI/derivatives"
+DATA_SOURCE="all"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -59,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             PHASES="$2"
             shift 2
             ;;
+        --data-source)
+            DATA_SOURCE="$2"
+            shift 2
+            ;;
         --time)
             TIME="$2"
             shift 2
@@ -80,6 +85,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --derivatives-dir DIR Derivatives directory (default: $DERIVATIVES_DIR)"
             echo "  --subjects LIST       Comma-separated list of subjects (e.g., sub-001,sub-002)"
             echo "  --phases LIST         Comma-separated list of phases (e.g., phase2,phase3)"
+            echo "  --data-source TYPE    Data source: all, placebo, or guess (default: all)"
             echo "  --time TIME           SLURM time limit (e.g., 08:00:00)"
             echo "  --mem MEM             SLURM memory limit (e.g., 64G)"
             echo "  --dry-run             Show what would be done without executing"
@@ -91,6 +97,9 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "  # Generate scripts for specific subjects"
             echo "  $0 --subjects sub-001,sub-002"
+            echo ""
+            echo "  # Generate scripts for specific data source"
+            echo "  $0 --data-source placebo"
             echo ""
             echo "  # Generate scripts with custom parameters"
             echo "  $0 --time 08:00:00 --mem 64G"
@@ -111,6 +120,7 @@ echo "=== Pre-group Voxel-wise Analysis Launcher ==="
 echo "Output directory: $OUTPUT_DIR"
 echo "Script directory: $SCRIPT_DIR"
 echo "Derivatives directory: $DERIVATIVES_DIR"
+echo "Data source: $DATA_SOURCE"
 
 # Build command for script generator
 CMD="python3 create_pre_group_voxelWise.py"
@@ -128,6 +138,10 @@ fi
 
 if [[ -n "$PHASES" ]]; then
     CMD="$CMD --phases '$PHASES'"
+fi
+
+if [[ -n "$DATA_SOURCE" ]]; then
+    CMD="$CMD --data-source '$DATA_SOURCE'"
 fi
 
 if [[ -n "$TIME" ]]; then
