@@ -83,7 +83,7 @@ mkdir -p {output_dir}
 
 # Run the pre-group analysis for this subject and phase
 apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
-    python3 /app/updated/run_pre_group_voxelWise.py \\
+    python3 /app/run_pre_group_voxelWise.py \\
     --output-dir {output_dir} \\
     --subject {subject} \\
     --phase {phase} \\
