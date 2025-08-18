@@ -663,8 +663,9 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
     This function is now generic and can handle any combination of columns in group_info.
     
     Args:
-        group_info (pandas.DataFrame): DataFrame where each column represents a condition/factor.
-                                     Rows are subjects, columns are factors (e.g., group, drug, guess)
+        group_info (pandas.DataFrame or list): DataFrame where each column represents a condition/factor,
+                                             or list of tuples where each tuple represents a subject's factors.
+                                             Rows are subjects, columns are factors (e.g., group, drug, guess)
         output_dir (str): Output directory for design files
         column_names (list): Names of columns to use as factors (if None, uses all columns)
         contrast_type (str): Type of contrasts to generate ('auto', 'main_effects', 'interactions', 'custom')
@@ -704,17 +705,35 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
     # === Generic design matrix generation ===
     n = len(group_info)
     
-    # Auto-detect column structure if not provided
-    if column_names is None:
-        # Use all columns except 'subject' if it exists
-        all_columns = list(group_info.columns)
-        if 'subject' in all_columns:
-            column_names = [col for col in all_columns if col != 'subject']
-        else:
-            column_names = all_columns
+    # Handle both DataFrame and list inputs
+    if hasattr(group_info, 'columns'):
+        # Input is a pandas DataFrame
+        if column_names is None:
+            # Use all columns except 'subject' if it exists
+            all_columns = list(group_info.columns)
+            if 'subject' in all_columns:
+                column_names = [col for col in all_columns if col != 'subject']
+            else:
+                column_names = all_columns
+    else:
+        # Input is a list of tuples, convert to DataFrame
+        import pandas as pd
+        if column_names is None:
+            # Default column names based on the data structure
+            if len(group_info) > 0 and len(group_info[0]) == 4:
+                column_names = ['subID', 'group_id', 'drug_id', 'guess_id']
+            elif len(group_info) > 0 and len(group_info[0]) == 3:
+                column_names = ['subID', 'group_id', 'drug_id']
+            elif len(group_info) > 0 and len(group_info[0]) == 2:
+                column_names = ['subID', 'group_id']
+            else:
+                column_names = [f'factor_{i}' for i in range(len(group_info[0]))]
+        
+        # Convert list of tuples to DataFrame
+        group_info = pd.DataFrame(group_info, columns=column_names)
     
-    # Extract factor columns
-    factor_columns = column_names
+    # Extract factor columns (exclude 'subID' if present)
+    factor_columns = [col for col in column_names if col != 'subID']
     n_factors = len(factor_columns)
     
     # Get unique levels for each factor
