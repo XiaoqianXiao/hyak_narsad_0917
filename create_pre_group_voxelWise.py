@@ -105,7 +105,14 @@ DEFAULT_SLURM_PARAMS = {
 def get_subject_list(derivatives_dir):
     """Get list of subjects from derivatives directory."""
     subjects = []
-    first_level_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'firstLevel')
+    # The derivatives_dir should already point to the fMRI_analysis directory
+    # or we need to construct the path correctly
+    if 'fMRI_analysis' in derivatives_dir:
+        first_level_dir = os.path.join(derivatives_dir, 'firstLevel')
+    else:
+        first_level_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'firstLevel')
+    
+    logger.info(f"Looking for first level directory at: {first_level_dir}")
     
     if not os.path.exists(first_level_dir):
         logger.warning(f"First level directory not found: {first_level_dir}")

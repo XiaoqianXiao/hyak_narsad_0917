@@ -34,7 +34,7 @@ set -e
 # Default parameters
 OUTPUT_DIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel"
 SCRIPT_DIR=""
-DERIVATIVES_DIR="/gscratch/fang/NARSAD/MRI/derivatives"
+DERIVATIVES_DIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis"
 DATA_SOURCE="all"
 WORKDIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis"
 
