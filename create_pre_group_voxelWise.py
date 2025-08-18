@@ -105,13 +105,40 @@ DEFAULT_SLURM_PARAMS = {
 def get_subject_list(derivatives_dir):
     """Get list of subjects from derivatives directory."""
     subjects = []
-    for phase in ['phase2', 'phase3']:
-        phase_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'firstLevel', f'task-{phase}')
-        if os.path.exists(phase_dir):
-            # Look for subject directories
-            for item in os.listdir(phase_dir):
-                if item.startswith('sub-') and os.path.isdir(os.path.join(phase_dir, item)):
-                    subjects.append((item, phase))
+    first_level_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'firstLevel')
+    
+    if not os.path.exists(first_level_dir):
+        logger.warning(f"First level directory not found: {first_level_dir}")
+        return subjects
+    
+    # Look for subject directories (e.g., sub-N101, sub-N102, etc.)
+    for item in os.listdir(first_level_dir):
+        if item.startswith('sub-') and os.path.isdir(os.path.join(first_level_dir, item)):
+            subject_dir = os.path.join(first_level_dir, item)
+            
+            # Check for session directories (e.g., ses-pilot3mm, ses-001, etc.)
+            for session in os.listdir(subject_dir):
+                if session.startswith('ses-') and os.path.isdir(os.path.join(subject_dir, session)):
+                    session_dir = os.path.join(subject_dir, session)
+                    func_dir = os.path.join(session_dir, 'func')
+                    
+                    if os.path.exists(func_dir):
+                        # Check what phases this subject has by looking at the func files
+                        phase_files = {}
+                        for file in os.listdir(func_dir):
+                            if file.endswith('_bold.nii') and 'task-phase' in file:
+                                # Extract phase from filename (e.g., task-phase2, task-phase3)
+                                if 'task-phase2' in file:
+                                    phase_files['phase2'] = True
+                                elif 'task-phase3' in file:
+                                    phase_files['phase3'] = True
+                        
+                        # Add subject-phase combinations
+                        for phase in phase_files.keys():
+                            subjects.append((item, phase))
+                        # Continue to check other sessions (don't break)
+    
+    logger.info(f"Found subjects: {[f'{s[0]}-{s[1]}' for s in subjects]}")
     return subjects
 
 def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, data_source):
