@@ -34,7 +34,7 @@ import pandas as pd
 from nipype import Workflow, Node
 from nipype.interfaces.utility import IdentityInterface
 from nipype.interfaces.io import DataSink
-from group_level_workflows import data_prepare_wf
+from group_level_workflows import wf_data_prepare
 from templateflow.api import get as tpl_get, templates as get_tpl_list
 
 # Configure logging
@@ -319,7 +319,7 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
     """
     try:
         # Create workflow
-        prepare_wf = data_prepare_wf(
+        prepare_wf = wf_data_prepare(
             output_dir=contrast_results_dir,
             contrast=contrast,
             name=f"data_prepare_{task}_cope{contrast}"
