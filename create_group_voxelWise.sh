@@ -34,13 +34,13 @@ DEFAULT_ANALYSIS_TYPES=("randomise" "flameo")
 TASKS=("phase2" "phase3")
 
 # Dynamic contrast ranges based on task
-# Phase 2: 8 conditions → 56 contrasts (8 × 7)
+# Phase 2: 7 conditions → 42 contrasts (7 × 6)
 # Phase 3: 6 conditions → 30 contrasts (6 × 5)
 get_contrast_range() {
     local task="$1"
     case "$task" in
         "phase2")
-            echo "$(seq 1 56)"  # 8 conditions → 56 contrasts
+            echo "$(seq 1 42)"  # 7 conditions → 42 contrasts
             ;;
         "phase3")
             echo "$(seq 1 30)"  # 6 conditions → 30 contrasts
@@ -86,7 +86,7 @@ OPTIONS:
     --cpus-per-task N     CPUs per task (default: $DEFAULT_CPUS_PER_TASK)
     --memory MEMORY       Memory requirement (default: $DEFAULT_MEMORY)
     --time TIME           Time limit (default: $DEFAULT_TIME)
-    --base-dir DIR        Base directory for data (default: /gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows)
+    --base-dir DIR        Base directory for data (default: /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis)
     --script-dir DIR      Directory to save SLURM scripts (default: auto-generated)
     --help                Show this help message
 
@@ -133,7 +133,7 @@ PARTITION="$DEFAULT_PARTITION"
 CPUS_PER_TASK="$DEFAULT_CPUS_PER_TASK"
 MEMORY="$DEFAULT_MEMORY"
 TIME="$DEFAULT_TIME"
-BASE_DIR="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows"
+BASE_DIR="/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis"
 SCRIPT_DIR=""
 
 # Parse command line arguments

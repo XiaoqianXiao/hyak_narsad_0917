@@ -63,7 +63,7 @@ PROJECT_NAME = 'NARSAD'
 DATA_DIR = os.path.join(ROOT_DIR, PROJECT_NAME, 'MRI')
 DERIVATIVES_DIR = os.path.join(DATA_DIR, 'derivatives')
 SCRUBBED_DIR = '/scrubbed_dir'
-CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_pre_group_level_1.0.sif"
+CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 
 # Define standard reference image (MNI152 template from FSL)
 GROUP_MASK = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
@@ -101,8 +101,8 @@ def get_contrast_range(task):
         list: Range of contrast numbers
     """
     if task == 'phase2':
-        # Phase 2: 8 conditions → 56 contrasts (8 × 7)
-        return list(range(1, 57))
+        # Phase 2: 7 conditions → 42 contrasts (7 × 6)
+        return list(range(1, 43))
     elif task == 'phase3':
         # Phase 3: 6 conditions → 30 contrasts (6 × 5)
         return list(range(1, 31))
@@ -111,7 +111,8 @@ def get_contrast_range(task):
         return list(range(1, 43))
 
 # Default contrast range (will be overridden per task)
-CONTRAST_RANGE = list(range(1, 43))  # Contrasts 1-42
+# This is a fallback - actual ranges are determined dynamically per task
+CONTRAST_RANGE = list(range(1, 43))  # Contrasts 1-42 (fallback)
 
 # =============================================================================
 # DATA LOADING FUNCTIONS
