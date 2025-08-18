@@ -62,7 +62,7 @@ ROOT_DIR = os.getenv('DATA_DIR', '/data')
 PROJECT_NAME = 'NARSAD'
 DATA_DIR = os.path.join(ROOT_DIR, PROJECT_NAME, 'MRI')
 DERIVATIVES_DIR = os.path.join(DATA_DIR, 'derivatives')
-SCRUBBED_DIR = '/scrubbed_dir'
+SCRUBBED_DIR = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
 CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
 
 # Define standard reference image (MNI152 template from FSL)
@@ -460,11 +460,12 @@ Examples:
         if args.workflow_dir:
             workflow_dir = args.workflow_dir
         else:
+            # Use a writable location for workflow directory if SCRUBBED_DIR is read-only
             workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows/groupLevel')
         
-        # Create necessary directories
-        for directory in [workflow_dir, results_dir]:
-            Path(directory).mkdir(parents=True, exist_ok=True)
+        # Create workflow directory (use temporary location to avoid read-only issues)
+        Path(workflow_dir).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Workflow directory: {workflow_dir}")
         
         # Load data
         df_behav, final_include_columns = load_behavioral_data(
