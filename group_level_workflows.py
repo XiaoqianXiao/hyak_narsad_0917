@@ -20,11 +20,11 @@ def wf_data_prepare(output_dir, contrast, name="wf_data_prepare"):
     wf = Workflow(name=name, base_dir=output_dir)
 
     # Input node
-    inputnode = Node(IdentityInterface(fields=['in_copes', 'in_varcopes', 'group_info', 'use_guess', 'result_dir', 'group_mask']),
+    inputnode = Node(IdentityInterface(fields=['in_copes', 'in_varcopes', 'group_info', 'result_dir', 'group_mask']),
                      name='inputnode')
 
     # Design generation
-    design_gen = Node(Function(input_names=['group_info', 'output_dir','use_guess'],
+    design_gen = Node(Function(input_names=['group_info', 'output_dir'],
                                output_names=['design_file', 'grp_file', 'con_file'],
                                function=create_dummy_design_files,
                                imports=['import os', 'import numpy as np']),
@@ -62,7 +62,6 @@ def wf_data_prepare(output_dir, contrast, name="wf_data_prepare"):
     # Workflow connections
     wf.connect([
         (inputnode, design_gen, [('group_info', 'group_info')]),
-        (inputnode, design_gen, [('use_guess', 'use_guess')]),
         (inputnode, merge_copes, [('in_copes', 'in_files')]),
         (inputnode, merge_varcopes, [('in_varcopes', 'in_files')]),
         (inputnode, resample_copes, [('group_mask', 'reference')]),

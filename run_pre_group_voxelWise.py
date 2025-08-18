@@ -37,6 +37,11 @@ from nipype.interfaces.io import DataSink
 from group_level_workflows import wf_data_prepare
 from templateflow.api import get as tpl_get, templates as get_tpl_list
 
+# Configure Nipype crash directory to a writable location
+import nipype
+nipype.config.set('execution', 'crashfile_format', 'txt')
+nipype.config.set('execution', 'crash_dir', '/tmp/nipype_crashes')
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -335,8 +340,7 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         prepare_wf.inputs.inputnode.group_mask = GROUP_MASK
         
         # Set analysis-specific parameters
-        if 'guess_id' in include_columns:
-            prepare_wf.inputs.inputnode.use_guess = True
+        # Note: use_guess parameter removed as it's not needed for design generation
         
         logger.info(f"Running data preparation for task-{task}, contrast-{contrast}")
         prepare_wf.run(plugin='MultiProc', plugin_args={'n_procs': 4})
