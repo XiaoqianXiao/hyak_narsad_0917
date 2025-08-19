@@ -255,15 +255,15 @@ def wf_flameo(output_dir, name="wf_flameo", use_clustering=True,
         (inputnode, flameo, [
             ('var_cope_files', 'var_cope_file'),
             ('mask_file', 'mask_file'),
-            ('design_file', 'design_mat'),
+            ('design_file', 'design_file'),
             ('con_file', 't_con_file')
         ]),
         # Collect outputs
         (flameo, outputnode, [
             ('zstats', 'zstats'),
-            ('cope_files', 'cope_files'),
-            ('varcope_files', 'varcope_files'),
-            ('fstat_files', 'fstat_files')
+            ('copes', 'cope_files'),
+            ('varcopes', 'varcope_files'),
+            ('fstats', 'fstat_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
@@ -382,14 +382,14 @@ def wf_randomise(output_dir, name="wf_randomise",
         (merge_copes, randomise, [('merged_file', 'in_file')]),
         (inputnode, randomise, [
             ('mask_file', 'mask'),
-            ('design_file', 'design_mat'),
+            ('design_file', 'design_file'),
             ('con_file', 'tcon')
         ]),
         # Collect outputs
         (randomise, outputnode, [
             ('tstat_files', 'tstat_files'),
-            ('t_corrected_p_files', 'tfce_corr_p_files'),
-            ('vox_p_files', 'vox_p_files')
+            ('tfce_corr_p_files', 'tfce_corr_p_files'),
+            ('vox_pvalues', 'vox_p_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
@@ -408,7 +408,7 @@ def wf_randomise(output_dir, name="wf_randomise",
         
         connections.extend([
             # Convert TFCE p-values to z-scores
-            (randomise, fdr_ztop, [('t_corrected_p_files', 'in_file')]),
+            (randomise, fdr_ztop, [('tfce_corr_p_files', 'in_file')]),
             (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
             (fdr_ztop, datasink, [('out_file', 'stats.@zscores')])
         ])
@@ -498,7 +498,7 @@ def create_group_analysis_workflow(output_dir, method='flameo', subjects=None,
                                    name='flameo')
         else:  # randomise
             analysis_node = MapNode(Randomise(num_perm=10000, tfce=True, vox_p_values=True),
-                                   iterfield=['in_file', 'mask', 'design_mat', 'tcon'],
+                                   iterfield=['in_file', 'mask', 'design_file', 'tcon'],
                                    name='randomise')
         
         # Statistical thresholding
@@ -570,18 +570,18 @@ def create_group_analysis_workflow(output_dir, method='flameo', subjects=None,
                 
                 (mask_copes, analysis_node, [('out_file', 'in_file')]),
                 
-                (inputnode, analysis_node, [('design_file', 'design_mat'),
+                (inputnode, analysis_node, [('design_file', 'design_file'),
                                            ('con_file', 'tcon')]),
                 
-                (analysis_node, tfce_ztop, [('t_corrected_p_files', 'in_file')]),
+                (analysis_node, tfce_ztop, [('tfce_corr_p_files', 'in_file')]),
                 
                 (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
-                                            ('t_corrected_p_files', 'tfce_corr_p_files')]),
+                                            ('tfce_corr_p_files', 'tfce_corr_p_files')]),
                 (tfce_ztop, outputnode, [('out_file', 'z_thresh_files')]),
                 (roi_node, outputnode, [('roi_files', 'roi_files')]),
                 
                 (outputnode, datasink, [('tstat_files', 'tstats'),
-                                        ('t_corrected_p_files', 'tfce_p'),
+                                        ('tfce_corr_p_files', 'tfce_p'),
                                         ('z_thresh_files', 'zscores'),
                                         ('roi_files', 'roi_files')])
             ])
@@ -1604,7 +1604,7 @@ def wf_roi_psc_analysis(output_dir, name="wf_roi_psc_analysis", method='flameo',
                                name='flameo')
     else:  # randomise
         analysis_node = MapNode(Randomise(num_perm=10000, tfce=True, vox_p_values=True),
-                               iterfield=['in_file', 'mask', 'design_mat', 'tcon'],
+                               iterfield=['in_file', 'mask', 'design_file', 'tcon'],
                                name='randomise')
 
     # Output node (method-dependent)
@@ -1644,10 +1644,10 @@ def wf_roi_psc_analysis(output_dir, name="wf_roi_psc_analysis", method='flameo',
             (roi_node, cope_to_psc, [('roi_files', 'roi_mask')]),
             (roi_node, analysis_node, [('roi_files', 'mask')]),
             (cope_to_psc, analysis_node, [('psc_file', 'in_file')]),
-            (inputnode, analysis_node, [('design_file', 'design_mat'),
+            (inputnode, analysis_node, [('design_file', 'design_file'),
                                        ('con_file', 'tcon')]),
             (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
-                                        ('t_corrected_p_files', 'tfce_corr_p_files')]),
+                                        ('tfce_corr_p_files', 'tfce_corr_p_files')]),
             (roi_node, outputnode, [('roi_files', 'roi_files')]),
             (outputnode, datasink, [('tstat_files', 'tstats'),
                                     ('tfce_corr_p_files', 'tfce_p'),
