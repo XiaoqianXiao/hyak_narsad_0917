@@ -320,22 +320,10 @@ Examples:
         if not os.access(os.path.dirname(output_dir), os.W_OK):
             logger.warning("Output directory parent is not writable, will use /tmp for scripts")
     
-    # Check if we're running in a container and adjust paths if needed
-    container_env = os.getenv('CONTAINER', 'false')
-    logger.info(f"Container environment variable: {container_env}")
-    logger.info(f"Checking for /.dockerenv: {os.path.exists('/.dockerenv')}")
-    logger.info(f"Checking for /run/.containerenv: {os.path.exists('/run/.containerenv')}")
-    
-    if container_env == 'true' or os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv'):
-        logger.info("Detected container environment")
-        # Use container paths
-        output_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
-        derivatives_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis'
-    else:
-        logger.info("Detected host environment")
-        # Use host paths
-        output_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
-        derivatives_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis'
+    # Use container paths directly since this script runs inside the container
+    logger.info("Using container paths directly")
+    output_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
+    derivatives_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis'
     
     # Set script directory - use default workdir/pregroup structure
     scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
