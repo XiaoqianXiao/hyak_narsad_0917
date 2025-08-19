@@ -111,13 +111,18 @@ def get_subject_list(derivatives_dir):
                     if os.path.exists(func_dir):
                         # Check what phases this subject has by looking at the func files
                         phase_files = {}
+                        logger.info(f"Scanning func directory: {func_dir}")
                         for file in os.listdir(func_dir):
                             if file.endswith('_bold.nii') and 'task-phase' in file:
                                 # Extract phase from filename (e.g., task-phase2, task-phase3)
+                                # Handle complex filenames like: sub-N101_ses-pilot3mm_task-phase3_space-MNI152NLin2009cAsym_desc-varcope9_bold.nii
+                                logger.info(f"Found bold file: {file}")
                                 if 'task-phase2' in file:
                                     phase_files['phase2'] = True
+                                    logger.info(f"  -> Phase 2 detected")
                                 elif 'task-phase3' in file:
                                     phase_files['phase3'] = True
+                                    logger.info(f"  -> Phase 3 detected")
                         
                         # Add subject-phase combinations
                         for phase in phase_files.keys():
@@ -315,9 +320,17 @@ Examples:
         if not os.access(os.path.dirname(output_dir), os.W_OK):
             logger.warning("Output directory parent is not writable, will use /tmp for scripts")
     
-    # Set default values
-    output_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
-    derivatives_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis'
+    # Check if we're running in a container and adjust paths if needed
+    container_env = os.getenv('CONTAINER', 'false')
+    if container_env == 'true' or os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv'):
+        logger.info("Detected container environment")
+        # Use container paths
+        output_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
+        derivatives_dir = '/data/NARSAD/MRI/derivatives/fMRI_analysis'
+    else:
+        # Use host paths
+        output_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
+        derivatives_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis'
     
     # Set script directory - use default workdir/pregroup structure
     scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
