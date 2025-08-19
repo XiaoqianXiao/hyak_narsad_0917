@@ -400,9 +400,10 @@ Examples:
         # Use specified workdir/pregroup structure
         script_dir = Path(args.workdir).resolve() / 'pregroup'
     else:
-        # Auto-generate script directory based on output directory
-        # Use $workdir/pregroup structure
-        script_dir = Path(args.output_dir).resolve().parent / 'pregroup'
+        # Default to workdir/pregroup structure
+        # Use the output directory's parent as the workdir
+        workdir = Path(args.output_dir).resolve().parent
+        script_dir = workdir / 'pregroup'
     
     # Ensure script directory is absolute and in a writable location
     if not script_dir.is_absolute():
