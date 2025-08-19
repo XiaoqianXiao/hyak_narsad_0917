@@ -467,6 +467,12 @@ Examples:
         help='Data source to process (default: all)'
     )
     
+    parser.add_argument(
+        '--cope',
+        type=int,
+        help='Specific cope number to process (e.g., 1, 2, 3)'
+    )
+    
     args = parser.parse_args()
     
     # Validate arguments
