@@ -305,8 +305,7 @@ apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/s
     --contrast ${contrast} \\
     --analysis-type ${analysis_type} \\
     --data-source ${DATA_SOURCE} \\
-    --base-dir /scrubbed_dir/NARSAD/work_flows \\
-    --pregroup-dir /data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel
+    --base-dir /data/NARSAD/MRI/derivatives/fMRI_analysis
 
 EOF
             
