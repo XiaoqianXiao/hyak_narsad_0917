@@ -389,7 +389,7 @@ def wf_randomise(output_dir, name="wf_randomise",
         (randomise, outputnode, [
             ('tstat_files', 'tstat_files'),
             ('t_corrected_p_files', 'tfce_corr_p_files'),
-            ('vox_pvalues', 'vox_p_files')
+            ('vox_p_files', 'vox_p_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
