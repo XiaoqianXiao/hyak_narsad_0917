@@ -73,9 +73,9 @@ CONTAINER_PATH="/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level
 # =============================================================================
 
 DATA_SOURCE_CONFIGS=(
-    "standard:groupLevel/whole_brain:run_group_voxelWise.py"
-    "placebo:groupLevel/whole_brain/Placebo:run_group_voxelWise.py"
-    "guess:groupLevel/whole_brain:run_group_voxelWise.py"
+    "standard:whole_brain:run_group_voxelWise.py"
+    "placebo:whole_brain/Placebo:run_group_voxelWise.py"
+    "guess:whole_brain:run_group_voxelWise.py"
 )
 
 # =============================================================================
