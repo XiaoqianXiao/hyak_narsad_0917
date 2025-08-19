@@ -151,6 +151,10 @@ def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, da
     script_name = f"pre_group_{subject}_{phase}.sh"
     script_path = os.path.join(script_dir, script_name)
     
+    # Convert host path to container path for output_dir
+    # Replace /gscratch/fang with /data for container paths
+    container_output_dir = output_dir.replace('/gscratch/fang', '/data')
+    
     # Container bind mounts
     container_binds = [
         "-B /gscratch/fang:/data",
@@ -184,12 +188,12 @@ export SCRUBBED_DIR=/scrubbed_dir
 export DATA_DIR=/data
 
 # Create output directory
-mkdir -p {output_dir}
+mkdir -p {container_output_dir}
 
 # Run the pre-group analysis for this subject and phase
 apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
     python3 /app/run_pre_group_voxelWise.py \\
-    --output-dir {output_dir} \\
+    --output-dir {container_output_dir} \\
     --subject {subject} \\
     --phase {phase} \\
     --data-source {data_source}
@@ -298,8 +302,8 @@ Examples:
     
     parser.add_argument(
         '--output-dir',
-        default='/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel',
-        help='Output directory for pre-group analysis results (default: /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel)'
+        default='/data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel',
+        help='Output directory for pre-group analysis results (default: /data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel)'
     )
     
     parser.add_argument(
