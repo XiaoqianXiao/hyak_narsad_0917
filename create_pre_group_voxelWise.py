@@ -187,8 +187,8 @@ module load apptainer
 export SCRUBBED_DIR=/scrubbed_dir
 export DATA_DIR=/data
 
-# Create output directory
-mkdir -p {container_output_dir}
+# Create output directory on host (before container launch)
+mkdir -p {output_dir}
 
 # Run the pre-group analysis for this subject and phase
 apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
