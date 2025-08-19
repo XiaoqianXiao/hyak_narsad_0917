@@ -261,9 +261,9 @@ def wf_flameo(output_dir, name="wf_flameo", use_clustering=True,
         # Collect outputs
         (flameo, outputnode, [
             ('zstats', 'zstats'),
-            ('copes', 'cope_files'),
-            ('varcopes', 'varcope_files'),
-            ('fstats', 'fstat_files')
+            ('cope', 'cope_files'),
+            ('varcope', 'varcope_files'),
+            ('fstat', 'fstat_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
@@ -382,19 +382,19 @@ def wf_randomise(output_dir, name="wf_randomise",
         (merge_copes, randomise, [('merged_file', 'in_file')]),
         (inputnode, randomise, [
             ('mask_file', 'mask'),
-            ('design_file', 'design_file'),
+            ('design_file', 'design_mat'),
             ('con_file', 'tcon')
         ]),
         # Collect outputs
         (randomise, outputnode, [
             ('tstat_files', 'tstat_files'),
-            ('tfce_corr_p_files', 'tfce_corr_p_files'),
+            ('t_corrected_p_files', 'tfce_corr_p_files'),
             ('vox_pvalues', 'vox_p_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
             ('tstat_files', 'stats.@tstats'),
-            ('tfce_corr_p_files', 'stats.@tfce_p'),
+            ('t_corrected_p_files', 'stats.@tfce_p'),
             ('vox_p_files', 'stats.@vox_p')
         ])
     ]
@@ -408,7 +408,7 @@ def wf_randomise(output_dir, name="wf_randomise",
         
         connections.extend([
             # Convert TFCE p-values to z-scores
-            (randomise, fdr_ztop, [('tfce_corr_p_files', 'in_file')]),
+            (randomise, fdr_ztop, [('t_corrected_p_files', 'in_file')]),
             (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
             (fdr_ztop, datasink, [('out_file', 'stats.@zscores')])
         ])
@@ -573,15 +573,15 @@ def create_group_analysis_workflow(output_dir, method='flameo', subjects=None,
                 (inputnode, analysis_node, [('design_file', 'design_file'),
                                            ('con_file', 'tcon')]),
                 
-                (analysis_node, tfce_ztop, [('tfce_corr_p_files', 'in_file')]),
+                (analysis_node, tfce_ztop, [('t_corrected_p_files', 'in_file')]),
                 
                 (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
-                                            ('tfce_corr_p_files', 'tfce_corr_p_files')]),
+                                            ('t_corrected_p_files', 'tfce_corr_p_files')]),
                 (tfce_ztop, outputnode, [('out_file', 'z_thresh_files')]),
                 (roi_node, outputnode, [('roi_files', 'roi_files')]),
                 
                 (outputnode, datasink, [('tstat_files', 'tstats'),
-                                        ('tfce_corr_p_files', 'tfce_p'),
+                                        ('t_corrected_p_files', 'tfce_p'),
                                         ('z_thresh_files', 'zscores'),
                                         ('roi_files', 'roi_files')])
             ])
@@ -1647,7 +1647,7 @@ def wf_roi_psc_analysis(output_dir, name="wf_roi_psc_analysis", method='flameo',
             (inputnode, analysis_node, [('design_file', 'design_file'),
                                        ('con_file', 'tcon')]),
             (analysis_node, outputnode, [('tstat_files', 'tstat_files'),
-                                        ('tfce_corr_p_files', 'tfce_corr_p_files')]),
+                                        ('t_corrected_p_files', 'tfce_corr_p_files')]),
             (roi_node, outputnode, [('roi_files', 'roi_files')]),
             (outputnode, datasink, [('tstat_files', 'tstats'),
                                     ('tfce_corr_p_files', 'tfce_p'),
