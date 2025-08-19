@@ -558,9 +558,7 @@ Examples:
             
             Path(task_results_dir).mkdir(parents=True, exist_ok=True)
             
-            # Clear previous workflow directory to avoid caching
-            if os.path.exists(task_workflow_dir):
-                shutil.rmtree(task_workflow_dir)
+            # Create workflow directory
             Path(task_workflow_dir).mkdir(parents=True, exist_ok=True)
             
             # Get dynamic contrast range for this task
@@ -605,8 +603,7 @@ Examples:
                     contrast_results_dir, contrast_workflow_dir, final_include_columns
                 )
                 
-                # Clean up intermediate directories
-                cleanup_intermediate_directories(contrast_workflow_dir)
+
         
         logger.info(f"Pre-group level analysis pipeline completed successfully: {analysis_desc}")
         
