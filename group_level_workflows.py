@@ -262,15 +262,13 @@ def wf_flameo(output_dir, name="wf_flameo", use_clustering=True,
         (flameo, outputnode, [
             ('zstats', 'zstats'),
             ('cope', 'cope_files'),
-            ('varcope', 'varcope_files'),
-            ('fstat', 'fstat_files')
+            ('varcope', 'varcope_files')
         ]),
         # Send to DataSink
         (outputnode, datasink, [
             ('zstats', 'stats.@zstats'),
             ('cope_files', 'stats.@copes'),
-            ('varcope_files', 'stats.@varcopes'),
-            ('fstat_files', 'stats.@fstats')
+            ('varcope_files', 'stats.@varcopes')
         ])
     ]
 
