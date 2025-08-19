@@ -300,8 +300,8 @@ apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/s
     --contrast ${contrast} \\
     --analysis-type ${analysis_type} \\
     --data-source ${DATA_SOURCE} \\
-    --base-dir ${BASE_DIR} \\
-    --pregroup-dir ${BASE_DIR}/groupLevel
+    --base-dir /scrubbed_dir/NARSAD/work_flows \\
+    --pregroup-dir /data/groupLevel
 
 EOF
             
