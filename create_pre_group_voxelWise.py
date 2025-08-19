@@ -401,8 +401,9 @@ Examples:
         script_dir = Path(args.workdir).resolve() / 'pregroup'
     else:
         # Default to workdir/pregroup structure
-        # Use the output directory's parent as the workdir
-        workdir = Path(args.output_dir).resolve().parent
+        # Use the scrubbed_dir as the base workdir
+        scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
+        workdir = Path(scrubbed_dir) / 'NARSAD' / 'work_flows' / 'groupLevel'
         script_dir = workdir / 'pregroup'
     
     # Ensure script directory is absolute and in a writable location
