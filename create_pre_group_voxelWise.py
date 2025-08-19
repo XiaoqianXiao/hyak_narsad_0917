@@ -81,7 +81,7 @@ DEFAULT_SLURM_PARAMS = {
     'time': '04:00:00',
     'mem': '32G',
     'cpus_per_task': 4,
-    'container': 'narsad-fmri_1st_level_1.0.sif'
+    'container': '/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif'
 }
 
 def get_subject_list(derivatives_dir):
