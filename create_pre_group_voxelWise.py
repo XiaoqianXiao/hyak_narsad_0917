@@ -17,6 +17,12 @@ USAGE:
     # Create scripts for specific data source
     python3 create_pre_group_voxelWise.py --data-source placebo
     
+    # Create scripts with limited factors (2x2 factorial design)
+    python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id"
+    
+    # Combine multiple options
+    python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id" --phases phase2 --data-source standard
+    
     # Dry run to see what would be created
     python3 create_pre_group_voxelWise.py --dry-run
     
@@ -143,7 +149,7 @@ def get_cope_list(derivatives_dir):
     logger.info(f"Found copes: {[f'{c[0]}-cope{c[1]}' for c in unique_copes]}")
     return unique_copes
 
-def create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, data_source):
+def create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, data_source, include_columns):
     """Create a SLURM script for a specific phase and cope."""
     
     script_name = f"pre_group_{phase}_cope{cope_num}.sh"
@@ -161,6 +167,18 @@ def create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, d
     # Convert container path to host path for mkdir command
     # Replace /data with /gscratch/fang for host paths
     host_output_dir = output_dir.replace('/data', '/gscratch/fang')
+
+    # Build the command with optional include-columns
+    cmd_parts = [
+        "python3 /app/run_pre_group_voxelWise.py",
+        f"--output-dir {output_dir}",
+        f"--phase {phase}",
+        f"--cope {cope_num}",
+        f"--data-source {data_source}"
+    ]
+    
+    if include_columns:
+        cmd_parts.append(f"--include-columns {include_columns}")
     
     # Script content
     script_content = f"""#!/bin/bash
@@ -238,6 +256,11 @@ Examples:
     parser.add_argument(
         '--phases',
         help='Comma-separated list of phases to process (e.g., phase2,phase3)'
+    )
+
+    parser.add_argument(
+        '--include-columns',
+        help='Comma-separated list of columns to include (e.g., "subID,group_id,drug_id")'
     )
     
     parser.add_argument(
@@ -335,7 +358,7 @@ Examples:
     # Create individual SLURM scripts
     created_scripts = []
     for phase, cope_num in phase_cope_pairs:
-        script_path = create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, args.data_source)
+        script_path = create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, args.data_source, args.include_columns)
         created_scripts.append(script_path)
         logger.info(f"Created: {script_path}")
     
