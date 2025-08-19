@@ -194,224 +194,93 @@ def wf_roi_extract(output_dir, roi_dir="/Users/xiaoqianxiao/tool/parcellation/RO
 
 
 
-def wf_flameo(output_dir, name="wf_flameo", use_clustering=True, 
-              cluster_threshold=3.2, cluster_pthreshold=0.05):
-    """
-    FLAMEO workflow for group-level analysis.
-    
-    This workflow performs group-level analysis using FLAMEO with optional clustering.
-    It takes cope files and var_cope files as input for mixed-effects analysis.
-    
-    Args:
-        output_dir (str): Output directory
-        name (str): Workflow name
-        use_clustering (bool): Whether to perform clustering
-        cluster_threshold (float): Cluster-forming threshold (default: 3.2)
-        cluster_pthreshold (float): Cluster significance threshold
-    """
+def wf_flameo(output_dir, name="wf_flameo"):
+    """Workflow for group-level analysis with FLAMEO and clustering (GRF with dlh)."""
     wf = Workflow(name=name, base_dir=output_dir)
 
-    # Input node - flexible inputs
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_files', 'var_cope_files', 'mask_file', 
-            'design_file', 'con_file', 'result_dir'
-        ]),
-        name='inputnode'
-    )
+    inputnode = Node(IdentityInterface(fields=['cope_file', 'var_cope_file', 'mask_file',
+                                               'design_file', 'grp_file', 'con_file', 'result_dir']),
+                     name='inputnode')
 
-    # Merge cope files across subjects
-    merge_copes = Node(
-        Merge(dimension='t'),
-        name='merge_copes'
-    )
+    flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')  # flame1 for mixed effects
 
-    # FLAMEO node
-    flameo = Node(
-        FLAMEO(run_mode='flame1'),
-        name='flameo'
-    )
+    # Smoothness estimation for GRF clustering
+    smoothness = MapNode(SmoothEstimate(),
+                         iterfield=['zstat_file'],  # Only zstat_file iterates
+                         name='smoothness')
 
-    # Output node
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'zstats', 'cope_files', 'varcope_files', 'fstat_files'
-        ]),
-        name='outputnode'
-    )
+    # Clustering node with dlh for GRF-based correction
+    clustering = MapNode(Cluster(threshold=2.3,  # Z-threshold (e.g., 2.3 or 3.1)
+                                 connectivity=26,  # 3D connectivity
+                                 out_threshold_file=True,
+                                 out_index_file=True,
+                                 out_localmax_txt_file=True,  # Local maxima text file
+                                 pthreshold=0.05),  # Cluster-level FWE threshold
+                         iterfield=['in_file', 'dlh', 'volume'],
+                         name='clustering')
 
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
+    outputnode = Node(IdentityInterface(fields=['zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks']),
+                      name='outputnode')
 
-    # Basic workflow connections
-    connections = [
-        # Merge copes
-        (inputnode, merge_copes, [('cope_files', 'in_files')]),
-        # FLAMEO inputs
-        (merge_copes, flameo, [('merged_file', 'cope_file')]),
-        (inputnode, flameo, [
-            ('var_cope_files', 'var_cope_file'),
-            ('mask_file', 'mask_file'),
-            ('design_file', 'design_file'),
-            ('con_file', 't_con_file')
-        ]),
-        # Collect outputs
-        (flameo, outputnode, [
-            ('zstats', 'zstats'),
-            ('cope', 'cope_files'),
-            ('varcope', 'varcope_files')
-        ]),
-        # Send to DataSink
-        (outputnode, datasink, [
-            ('zstats', 'stats.@zstats'),
-            ('cope_files', 'stats.@copes'),
-            ('varcope_files', 'stats.@varcopes')
-        ])
-    ]
+    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
 
-    # Add clustering if requested
-    if use_clustering:
-        # Smoothness estimation node
-        smoothness = Node(
-            SmoothEstimate(),
-            name='smoothness'
-        )
+    wf.connect([
+        # Inputs to FLAMEO
+        (inputnode, flameo, [('cope_file', 'cope_file'),
+                             ('var_cope_file', 'var_cope_file'),
+                             ('mask_file', 'mask_file'),
+                             ('design_file', 'design_file'),
+                             ('grp_file', 'cov_split_file'),
+                             ('con_file', 't_con_file')]),
 
-        # Clustering node with GRF
-        clustering = Node(
-            Cluster(
-                threshold=cluster_threshold,
-                connectivity=26,
-                out_threshold_file=True,
-                out_index_file=True,
-                out_localmax_txt_file=True,
-                pthreshold=cluster_pthreshold
-            ),
-            name='clustering'
-        )
+        # Smoothness estimation
+        (flameo, smoothness, [(('zstats', flatten_stats), 'zstat_file')]),
+        (inputnode, smoothness, [('mask_file', 'mask_file')]),  # Single mask, no iteration
 
-        # Add clustering connections
-        connections.extend([
-            # Smoothness estimation
-            (flameo, smoothness, [('zstats', 'zstat_file')]),
-            (inputnode, smoothness, [('mask_file', 'mask_file')]),
-            # Clustering
-            (flameo, clustering, [('zstats', 'in_file')]),
-            (smoothness, clustering, [('volume', 'volume'), ('dlh', 'dlh')]),
-            # Add clustering outputs
-            (clustering, outputnode, [
-                ('threshold_file', 'cluster_thresh'),
-                ('index_file', 'cluster_index'),
-                ('localmax_txt_file', 'cluster_peaks')
-            ]),
-            (clustering, datasink, [
-                ('threshold_file', 'cluster_results.@thresh'),
-                ('index_file', 'cluster_results.@index'),
-                ('localmax_txt_file', 'cluster_results.@peaks')
-            ])
-        ])
+        # Clustering with dlh
+        (flameo, clustering, [(('zstats', flatten_stats), 'in_file')]),
+        (smoothness, clustering, [('volume', 'volume')]),
+        (smoothness, clustering, [('dlh', 'dlh')]),
 
-    wf.connect(connections)
+        # Outputs to outputnode
+        (flameo, outputnode, [('zstats', 'zstats')]),
+        (clustering, outputnode, [('threshold_file', 'cluster_thresh'),
+                                  ('index_file', 'cluster_index'),
+                                  ('localmax_txt_file', 'cluster_peaks')]),
+
+        # Outputs to DataSink
+        (outputnode, datasink, [('zstats', 'stats.@zstats'),
+                                ('cluster_thresh', 'cluster_results.@thresh'),
+                                ('cluster_index', 'cluster_results.@index'),
+                                ('cluster_peaks', 'cluster_results.@peaks')])
+    ])
     return wf
 
-def wf_randomise(output_dir, name="wf_randomise", 
-                 num_perm=10000, use_tfce=True, use_voxelwise=True):
-    """
-    Randomise workflow for group-level analysis.
-    
-    This workflow performs non-parametric group-level analysis using Randomise.
-    It takes cope files as input and performs permutation-based statistical testing.
-    
-    Args:
-        output_dir (str): Output directory
-        name (str): Workflow name
-        num_perm (int): Number of permutations
-        use_tfce (bool): Whether to use TFCE
-        use_voxelwise (bool): Whether to compute voxelwise p-values
-    """
+def wf_randomise(output_dir, name="wf_randomise"):
+    """Workflow for group-level analysis with Randomise and TFCE."""
     wf = Workflow(name=name, base_dir=output_dir)
-
-    # Input node
-    inputnode = Node(
-        IdentityInterface(fields=[
-            'cope_files', 'mask_file', 'design_file', 'con_file'
-        ]),
-        name='inputnode'
-    )
-
-    # Merge cope files across subjects
-    merge_copes = Node(
-        Merge(dimension='t'),
-        name='merge_copes'
-    )
-
-    # Randomise node with flexible options
-    randomise = Node(
-        Randomise(
-            num_perm=num_perm,
-            tfce=use_tfce,
-            vox_p_values=use_voxelwise
-        ),
-        name='randomise'
-    )
-
-    # Output node
-    outputnode = Node(
-        IdentityInterface(fields=[
-            'tstat_files', 'tfce_corr_p_files', 'vox_p_files'
-        ]),
-        name='outputnode'
-    )
-
-    # DataSink
-    datasink = Node(
-        DataSink(base_directory=output_dir),
-        name='datasink'
-    )
-
-    # Basic connections
-    connections = [
-        # Merge copes
-        (inputnode, merge_copes, [('cope_files', 'in_files')]),
-        # Randomise inputs
-        (merge_copes, randomise, [('merged_file', 'in_file')]),
-        (inputnode, randomise, [
-            ('mask_file', 'mask'),
-            ('design_file', 'design_mat'),
-            ('con_file', 'tcon')
-        ]),
-        # Collect outputs
-        (randomise, outputnode, [
-            ('tstat_files', 'tstat_files'),
-            ('t_corrected_p_files', 'tfce_corr_p_files'),
-            ('vox_p_files', 'vox_p_files')
-        ]),
-        # Send to DataSink
-        (outputnode, datasink, [
-            ('tstat_files', 'stats.@tstats'),
-            ('t_corrected_p_files', 'stats.@tfce_p'),
-            ('vox_p_files', 'stats.@vox_p')
-        ])
-    ]
-
-    # Add z-score conversion if TFCE is used
-    if use_tfce:
-        fdr_ztop = Node(
-            ImageMaths(op_string='-ztop', suffix='_zstat'),
-            name='fdr_ztop'
-        )
-        
-        connections.extend([
-            # Convert TFCE p-values to z-scores
-            (randomise, fdr_ztop, [('t_corrected_p_files', 'in_file')]),
-            (fdr_ztop, outputnode, [('out_file', 'z_thresh_files')]),
-            (fdr_ztop, datasink, [('out_file', 'stats.@zscores')])
-        ])
-
-    wf.connect(connections)
+    inputnode = Node(IdentityInterface(fields=['cope_file', 'mask_file', 'design_file', 'con_file', 'result_dir']),
+                     name='inputnode')
+    randomise = Node(Randomise(num_perm=5000,  # Number of permutations
+                               tfce=True),      # Use TFCE
+                     name='randomise')
+    outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files']),
+                      name='outputnode')
+    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+    # Workflow connections
+    wf.connect([
+        # Inputs to Randomise
+        (inputnode, randomise, [('cope_file', 'in_file'),
+                                ('mask_file', 'mask'),
+                                ('design_file', 'design_mat'),
+                                ('con_file', 'tcon')]),
+        # Outputs to outputnode
+        (randomise, outputnode, [('tstat_files', 'tstat_files'),
+                                 ('t_corrected_p_files', 'tfce_corr_p_files')]),
+        # Outputs to DataSink
+        (outputnode, datasink, [('tstat_files', 'stats.@tstats'),
+                                ('tfce_corr_p_files', 'stats.@tfce_corr_p')])
+    ])
     return wf
 
 # =============================================================================
@@ -1175,9 +1044,7 @@ def combine_roi_values(beta_files, psc_files, output_dir):
         psc_csv = os.path.join(output_dir, 'psc_all_rois.csv')
         psc_df.to_csv(psc_csv)
         return beta_csv, psc_csv
-    return beta_csv, None
-
-# =============================================================================
+    return beta_csv, None# =============================================================================
 # UNIFIED GROUP-LEVEL ANALYSIS WORKFLOW
 # =============================================================================
 
@@ -1700,3 +1567,4 @@ def convert_cope_to_psc(cope_file, baseline_cope_file, roi_mask):
     nib.save(psc_img, psc_file)
     
     return psc_file
+
