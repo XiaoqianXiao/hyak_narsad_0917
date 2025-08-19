@@ -8,7 +8,7 @@ allowing parallel processing of the pre-group level analysis.
 Author: Xiaoqian Xiao (xiao.xiaoqian.320@gmail.com)
 
 USAGE:
-    # Create scripts for all subjects and phases (uses default output directory)
+    # Create scripts for all subjects and phases (uses preset defaults)
     python3 create_pre_group_voxelWise.py
     
     # Create scripts for specific subjects
@@ -23,18 +23,6 @@ USAGE:
     # Create scripts for specific data source
     python3 create_pre_group_voxelWise.py --data-source placebo
     
-    # Custom SLURM parameters
-    python3 create_pre_group_voxelWise.py --time 08:00:00 --mem 64G --partition ckpt-all
-    
-    # Custom script directory
-    python3 create_pre_group_voxelWise.py --script-dir /custom/script/path
-    
-    # Custom work directory
-    python3 create_pre_group_voxelWise.py --workdir /custom/workdir
-    
-    # Custom output directory
-    python3 create_pre_group_voxelWise.py --output-dir /custom/path
-    
     # Dry run to see what would be created
     python3 create_pre_group_voxelWise.py --dry-run
     
@@ -42,14 +30,14 @@ USAGE:
     python3 create_pre_group_voxelWise.py --help
 
 EXAMPLES:
-    # Quick start with defaults (uses default output directory)
+    # Quick start with preset defaults
     python3 create_pre_group_voxelWise.py
     
     # Process only Phase 2 data
     python3 create_pre_group_voxelWise.py --phases phase2
     
-    # Process specific subjects with custom resources
-    python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002 --time 06:00:00 --mem 48G
+    # Process specific subjects
+    python3 create_pre_group_voxelWise.py --subjects sub-001,sub-002
     
     # Process placebo data only
     python3 create_pre_group_voxelWise.py --data-source placebo
@@ -57,14 +45,8 @@ EXAMPLES:
     # Process guess data for specific subjects
     python3 create_pre_group_voxelWise.py --data-source guess --subjects sub-001,sub-002
     
-    # Custom work directory
-    python3 create_pre_group_voxelWise.py --workdir /custom/workdir
-    
     # Test with dry run first
     python3 create_pre_group_voxelWise.py --dry-run
-    
-    # Custom output directory
-    python3 create_pre_group_voxelWise.py --output-dir /custom/path
 
 SLURM PARAMETERS:
     --partition: SLURM partition (default: ckpt-all)
@@ -301,32 +283,10 @@ Examples:
     )
     
     parser.add_argument(
-        '--output-dir',
-        default='/data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel',
-        help='Output directory for pre-group analysis results (default: /data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel)'
-    )
-    
-    parser.add_argument(
-        '--script-dir',
-        help='Directory to save SLURM scripts (default: auto-generated based on output-dir)'
-    )
-    
-    parser.add_argument(
         '--data-source',
         choices=['all', 'placebo', 'guess'],
         default='all',
         help='Data source to process (default: all)'
-    )
-    
-    parser.add_argument(
-        '--derivatives-dir',
-        default='/data/NARSAD/MRI/derivatives/fMRI_analysis',
-        help='Path to derivatives directory (default: /data/NARSAD/MRI/derivatives/fMRI_analysis)'
-    )
-    
-    parser.add_argument(
-        '--workdir',
-        help='Work directory for scripts (default: auto-generated based on output-dir)'
     )
     
     parser.add_argument(
@@ -339,44 +299,6 @@ Examples:
         help='Comma-separated list of phases to process (e.g., phase2,phase3)'
     )
     
-    # SLURM parameters
-    parser.add_argument(
-        '--partition',
-        default=DEFAULT_SLURM_PARAMS['partition'],
-        help=f'SLURM partition (default: {DEFAULT_SLURM_PARAMS["partition"]})'
-    )
-    
-    parser.add_argument(
-        '--account',
-        default=DEFAULT_SLURM_PARAMS['account'],
-        help=f'SLURM account (default: {DEFAULT_SLURM_PARAMS["account"]})'
-    )
-    
-    parser.add_argument(
-        '--time',
-        default=DEFAULT_SLURM_PARAMS['time'],
-        help=f'SLURM time limit (default: {DEFAULT_SLURM_PARAMS["time"]})'
-    )
-    
-    parser.add_argument(
-        '--mem',
-        default=DEFAULT_SLURM_PARAMS['mem'],
-        help=f'SLURM memory limit (default: {DEFAULT_SLURM_PARAMS["mem"]})'
-    )
-    
-    parser.add_argument(
-        '--cpus-per-task',
-        type=int,
-        default=DEFAULT_SLURM_PARAMS['cpus_per_task'],
-        help=f'SLURM CPUs per task (default: {DEFAULT_SLURM_PARAMS["cpus_per_task"]})'
-    )
-    
-    parser.add_argument(
-        '--container',
-        default=DEFAULT_SLURM_PARAMS['container'],
-        help=f'Container image (default: {DEFAULT_SLURM_PARAMS["container"]})'
-    )
-    
     parser.add_argument(
         '--dry-run',
         action='store_true',
@@ -385,30 +307,22 @@ Examples:
     
     args = parser.parse_args()
     
-    # Ensure output directory is absolute
-    if not Path(args.output_dir).is_absolute():
-        args.output_dir = str(Path(args.output_dir).resolve())
-    
     # Check if we're running in a container and adjust paths if needed
     container_env = os.getenv('CONTAINER', 'false')
     if container_env == 'true' or os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv'):
         logger.info("Detected container environment")
         # In container, prefer /tmp for script generation if output dir is read-only
-        if not os.access(os.path.dirname(args.output_dir), os.W_OK):
+        if not os.access(os.path.dirname(output_dir), os.W_OK):
             logger.warning("Output directory parent is not writable, will use /tmp for scripts")
     
-    # Set script directory - ensure it's always an absolute path
-    if args.script_dir:
-        script_dir = Path(args.script_dir).resolve()
-    elif args.workdir:
-        # Use specified workdir/pregroup structure
-        script_dir = Path(args.workdir).resolve() / 'pregroup'
-    else:
-        # Default to workdir/pregroup structure
-        # Use the scrubbed_dir as the base workdir
-        scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
-        workdir = Path(scrubbed_dir) / 'NARSAD' / 'work_flows' / 'groupLevel'
-        script_dir = workdir / 'pregroup'
+    # Set default values
+    output_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel'
+    derivatives_dir = '/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis'
+    
+    # Set script directory - use default workdir/pregroup structure
+    scrubbed_dir = os.getenv('SCRUBBED_DIR', '/scrubbed_dir')
+    workdir = Path(scrubbed_dir) / 'NARSAD' / 'work_flows' / 'groupLevel'
+    script_dir = workdir / 'pregroup'
     
     # Ensure script directory is absolute and in a writable location
     if not script_dir.is_absolute():
@@ -416,7 +330,7 @@ Examples:
     
     logger.info(f"Script directory: {script_dir}")
     logger.info(f"Current working directory: {os.getcwd()}")
-    logger.info(f"Output directory: {args.output_dir}")
+    logger.info(f"Output directory: {output_dir}")
     
     if not args.dry_run:
         try:
@@ -448,14 +362,14 @@ Examples:
             else:
                 raise
     
-    # Get SLURM parameters
+    # Get SLURM parameters - use default values
     slurm_params = {
-        'partition': args.partition,
-        'account': args.account,
-        'time': args.time,
-        'mem': args.mem,
-        'cpus_per_task': args.cpus_per_task,
-        'container': args.container
+        'partition': DEFAULT_SLURM_PARAMS['partition'],
+        'account': DEFAULT_SLURM_PARAMS['account'],
+        'time': DEFAULT_SLURM_PARAMS['time'],
+        'mem': DEFAULT_SLURM_PARAMS['mem'],
+        'cpus_per_task': DEFAULT_SLURM_PARAMS['cpus_per_task'],
+        'container': DEFAULT_SLURM_PARAMS['container']
     }
     
     # Get subjects and phases to process
@@ -470,10 +384,10 @@ Examples:
                 subject_phase_pairs.append((subject, phase))
     else:
         # Get all subjects from derivatives directory
-        logger.info(f"Scanning derivatives directory: {args.derivatives_dir}")
-        logger.info(f"Derivatives directory type: {type(args.derivatives_dir)}")
-        logger.info(f"Derivatives directory absolute: {os.path.abspath(args.derivatives_dir)}")
-        subject_phase_pairs = get_subject_list(args.derivatives_dir)
+        logger.info(f"Scanning derivatives directory: {derivatives_dir}")
+        logger.info(f"Derivatives directory type: {type(derivatives_dir)}")
+        logger.info(f"Derivatives directory absolute: {os.path.abspath(derivatives_dir)}")
+        subject_phase_pairs = get_subject_list(derivatives_dir)
         
         if args.phases:
             phases_to_process = [p.strip() for p in args.phases.split(',')]
@@ -492,12 +406,12 @@ Examples:
     # Create individual SLURM scripts
     created_scripts = []
     for subject, phase in subject_phase_pairs:
-        script_path = create_slurm_script(subject, phase, args.output_dir, script_dir, slurm_params, args.data_source)
+        script_path = create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, args.data_source)
         created_scripts.append(script_path)
         logger.info(f"Created: {script_path}")
     
     # Create launch script
-    launch_script = create_launch_script(script_dir, args.output_dir, slurm_params, args.data_source)
+    launch_script = create_launch_script(script_dir, output_dir, slurm_params, args.data_source)
     logger.info(f"Created: {launch_script}")
     
     # Create monitor script
