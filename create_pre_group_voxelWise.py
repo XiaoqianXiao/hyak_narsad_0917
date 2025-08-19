@@ -84,9 +84,9 @@ DEFAULT_SLURM_PARAMS = {
     'container': '/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif'
 }
 
-def get_subject_list(derivatives_dir):
-    """Get list of subjects from derivatives directory."""
-    subjects = []
+def get_cope_list(derivatives_dir):
+    """Get list of copes and phases from derivatives directory."""
+    copes = []
     # The derivatives_dir should point to the fMRI_analysis directory
     # so we just need to append 'firstLevel'
     first_level_dir = os.path.join(derivatives_dir, 'firstLevel')
@@ -95,7 +95,7 @@ def get_subject_list(derivatives_dir):
     
     if not os.path.exists(first_level_dir):
         logger.warning(f"First level directory not found: {first_level_dir}")
-        return subjects
+        return copes
     
     # Look for subject directories (e.g., sub-N101, sub-N102, etc.)
     for item in os.listdir(first_level_dir):
@@ -109,28 +109,48 @@ def get_subject_list(derivatives_dir):
                     func_dir = os.path.join(session_dir, 'func')
                     
                     if os.path.exists(func_dir):
-                        # Check what phases this subject has by looking at the func files
-                        phase_files = {}
+                        # Check what phases and copes this subject has by looking at the func files
+                        phase_cope_files = {}
                         logger.info(f"Scanning func directory: {func_dir}")
                         for file in os.listdir(func_dir):
                             if file.endswith('_bold.nii') and 'task-phase' in file:
-                                # Extract phase from filename (e.g., task-phase2, task-phase3)
+                                # Extract phase and cope from filename
                                 # Handle complex filenames like: sub-N101_ses-pilot3mm_task-phase3_space-MNI152NLin2009cAsym_desc-varcope9_bold.nii
                                 logger.info(f"Found bold file: {file}")
+                                
+                                # Extract phase
                                 if 'task-phase2' in file:
-                                    phase_files['phase2'] = True
-                                    logger.info(f"  -> Phase 2 detected")
+                                    phase = 'phase2'
                                 elif 'task-phase3' in file:
-                                    phase_files['phase3'] = True
-                                    logger.info(f"  -> Phase 3 detected")
+                                    phase = 'phase3'
+                                else:
+                                    continue
+                                
+                                # Extract cope number from desc-varcopeX or desc-copeX
+                                cope_num = None
+                                if 'desc-varcope' in file:
+                                    cope_num = int(file.split('desc-varcope')[1].split('_')[0])
+                                elif 'desc-cope' in file:
+                                    cope_num = int(file.split('desc-cope')[1].split('_')[0])
+                                
+                                if cope_num is not None:
+                                    if phase not in phase_cope_files:
+                                        phase_cope_files[phase] = set()
+                                    phase_cope_files[phase].add(cope_num)
+                                    logger.info(f"  -> Phase {phase}, Cope {cope_num} detected")
                         
-                        # Add subject-phase combinations
-                        for phase in phase_files.keys():
-                            subjects.append((item, phase))
+                        # Add phase-cope combinations for this subject
+                        for phase, cope_numbers in phase_cope_files.items():
+                            for cope_num in cope_numbers:
+                                copes.append((phase, cope_num))
                         # Continue to check other sessions (don't break)
     
-    logger.info(f"Found subjects: {[f'{s[0]}-{s[1]}' for s in subjects]}")
-    return subjects
+    # Remove duplicates and sort
+    unique_copes = list(set(copes))
+    unique_copes.sort(key=lambda x: (x[0], x[1]))  # Sort by phase, then cope number
+    
+    logger.info(f"Found copes: {[f'{c[0]}-cope{c[1]}' for c in unique_copes]}")
+    return unique_copes
 
 def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, data_source):
     """Create a SLURM script for a specific subject and phase."""
