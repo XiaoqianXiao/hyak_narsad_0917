@@ -565,7 +565,17 @@ Examples:
             
             # Get dynamic contrast range for this task
             task_contrast_range = get_contrast_range(task)
-            logger.info(f"Task {task}: Processing contrasts {task_contrast_range[0]}-{task_contrast_range[-1]} (total: {len(task_contrast_range)})")
+            
+            # If specific cope requested, filter to that cope only
+            if args.cope:
+                if args.cope in task_contrast_range:
+                    task_contrast_range = [args.cope]
+                    logger.info(f"Processing specific cope: {args.cope}")
+                else:
+                    logger.warning(f"Cope {args.cope} not found in task {task}, skipping")
+                    continue
+            else:
+                logger.info(f"Task {task}: Processing contrasts {task_contrast_range[0]}-{task_contrast_range[-1]} (total: {len(task_contrast_range)})")
             
             # Process each contrast
             for contrast in task_contrast_range:
