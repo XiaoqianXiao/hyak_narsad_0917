@@ -316,8 +316,8 @@ Examples:
     
     parser.add_argument(
         '--derivatives-dir',
-        default='/gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis',
-        help='Path to derivatives directory (default: /gscratch/fang/NARSAD/MRI/derivatives/fMRI_analysis)'
+        default='/data/NARSAD/MRI/derivatives/fMRI_analysis',
+        help='Path to derivatives directory (default: /data/NARSAD/MRI/derivatives/fMRI_analysis)'
     )
     
     parser.add_argument(
