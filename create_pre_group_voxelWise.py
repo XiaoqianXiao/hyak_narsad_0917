@@ -178,7 +178,7 @@ export DATA_DIR=/data
 mkdir -p {host_output_dir}
 
 # Run the pre-group analysis for this subject and phase
-apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
+apptainer exec {' '.join(container_binds)} /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif \\
     python3 /app/run_pre_group_voxelWise.py \\
     --output-dir {output_dir} \\
     --subject {subject} \\
