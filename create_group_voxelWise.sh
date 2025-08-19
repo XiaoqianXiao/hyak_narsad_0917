@@ -212,7 +212,12 @@ done
 # VALIDATION
 # =============================================================================
 
-
+# Validate data source
+if [[ "$DATA_SOURCE" != "standard" && "$DATA_SOURCE" != "placebo" && "$DATA_SOURCE" != "guess" ]]; then
+    echo "Error: Invalid data source: $DATA_SOURCE" >&2
+    echo "Valid sources: standard, placebo, guess" >&2
+    exit 1
+fi
 
 # Validate analysis types
 for analysis_type in "${ANALYSIS_TYPES[@]}"; do
@@ -301,7 +306,7 @@ apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/s
     --analysis-type ${analysis_type} \\
     --data-source ${DATA_SOURCE} \\
     --base-dir /scrubbed_dir/NARSAD/work_flows \\
-    --pregroup-dir /data/groupLevel
+    --pregroup-dir /data/NARSAD/MRI/derivatives/fMRI_analysis/groupLevel
 
 EOF
             
