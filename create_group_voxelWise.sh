@@ -299,7 +299,7 @@ for task in "${TASKS[@]}"; do
 #SBATCH --error=${err_path}
 
 module load apptainer
-apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir ${CONTAINER_PATH} \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_level_workflows.py:/app/group_level_workflows.py ${CONTAINER_PATH} \\
     python3 /app/${SCRIPT_NAME} \\
     --task ${task} \\
     --contrast ${contrast} \\
