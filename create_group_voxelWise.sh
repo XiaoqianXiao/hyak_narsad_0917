@@ -5,7 +5,8 @@
 # =============================================================================
 #
 # This script generates SLURM scripts for group-level voxel-wise fMRI analysis.
-# It supports different analysis types, data sources, and configurations.
+# It automatically discovers available copes from pre-group analysis results and
+# generates scripts only for those that have completed pre-group processing.
 #
 # Usage:
 #   ./create_group_voxelWise.sh --data-source standard
@@ -30,25 +31,34 @@ DEFAULT_MEMORY="16G"
 DEFAULT_TIME="8:00:00"
 DEFAULT_ANALYSIS_TYPES=("randomise" "flameo")
 
-# Tasks and contrasts
+# Tasks
 TASKS=("phase2" "phase3")
 
-# Dynamic contrast ranges based on task
-# Phase 2: 7 conditions → 42 contrasts (7 × 6)
-# Phase 3: 6 conditions → 30 contrasts (6 × 5)
-get_contrast_range() {
+# Function to discover available copes from pre-group analysis results
+get_available_copes() {
     local task="$1"
-    case "$task" in
-        "phase2")
-            echo "$(seq 1 42)"  # 7 conditions → 42 contrasts
-            ;;
-        "phase3")
-            echo "$(seq 1 30)"  # 6 conditions → 30 contrasts
-            ;;
-        *)
-            echo "$(seq 1 42)"  # Default fallback
-            ;;
-    esac
+    local base_dir="$2"
+    local pregroup_dir="${base_dir}/groupLevel"
+    local task_dir="${pregroup_dir}/task-${task}"
+    
+    if [[ ! -d "$task_dir" ]]; then
+        echo ""
+        return
+    fi
+    
+    # Find all cope directories
+    local copes=""
+    for item in "$task_dir"/cope*; do
+        if [[ -d "$item" ]]; then
+            # Extract cope number from directory name (e.g., cope1 -> 1)
+            local cope_num=$(basename "$item" | sed 's/cope//')
+            if [[ "$cope_num" =~ ^[0-9]+$ ]]; then
+                copes="$copes $cope_num"
+            fi
+        fi
+    done
+    
+    echo "$copes" | tr ' ' '\n' | sort -n | tr '\n' ' '
 }
 
 # =============================================================================
@@ -77,6 +87,8 @@ show_usage() {
 Usage: $0 [OPTIONS]
 
 Generate SLURM scripts for group-level voxel-wise fMRI analysis.
+This script automatically discovers available copes from pre-group analysis results
+and generates scripts only for those that have completed pre-group processing.
 
 OPTIONS:
     --data-source TYPE     Data source type: standard, placebo, or guess (default: standard)
@@ -102,6 +114,11 @@ EXAMPLES:
     
     # Generate scripts for standard analysis with custom base directory
     $0 --data-source standard --base-dir /custom/path
+
+NOTES:
+    - Scripts are only generated for copes that have completed pre-group analysis
+    - Expected pre-group directory structure: {base-dir}/groupLevel/task-{phase}/cope{cope_num}/
+    - Run pre-group analysis first using create_pre_group_voxelWise.py
 
 EOF
 }
@@ -234,7 +251,7 @@ IFS=':' read -r SCRIPT_SUBDIR SCRIPT_NAME <<< "$DATA_SOURCE_CONFIG"
 
 # Set script directory
 if [[ -z "$SCRIPT_DIR" ]]; then
-    SCRIPT_DIR="${BASE_DIR}/${SCRIPT_SUBDIR}"
+    SCRIPT_DIR="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/groupLevel/${SCRIPT_SUBDIR}"
 fi
 
 # Create script directory
@@ -244,9 +261,15 @@ echo "Creating SLURM scripts in: $SCRIPT_DIR"
 # Generate SLURM scripts
 SCRIPT_COUNT=0
 for task in "${TASKS[@]}"; do
-    # Get dynamic contrast range for this task
-    CONTRASTS=$(get_contrast_range "$task")
-    echo "Generating scripts for task: $task (contrasts: $CONTRASTS)"
+    # Discover available copes from pre-group analysis results
+    CONTRASTS=$(get_available_copes "$task" "$BASE_DIR")
+    if [[ -z "$CONTRASTS" ]]; then
+        echo "Warning: No pre-group results found for task: $task"
+        echo "  Expected directory: ${BASE_DIR}/groupLevel/task-${task}/"
+        continue
+    fi
+    
+    echo "Generating scripts for task: $task (available copes: $CONTRASTS)"
     
     for contrast in $CONTRASTS; do
         for analysis_type in "${ANALYSIS_TYPES[@]}"; do
@@ -277,7 +300,8 @@ apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/s
     --contrast ${contrast} \\
     --analysis-type ${analysis_type} \\
     --data-source ${DATA_SOURCE} \\
-    --base-dir ${BASE_DIR}
+    --base-dir ${BASE_DIR} \\
+    --pregroup-dir ${BASE_DIR}/groupLevel
 
 EOF
             
@@ -294,6 +318,10 @@ echo "Voxel-wise SLURM script generation completed!"
 echo "Total scripts created: $SCRIPT_COUNT"
 echo "Scripts location: $SCRIPT_DIR"
 echo "=========================================="
+echo ""
+echo "IMPORTANT: Scripts were generated only for copes with completed pre-group analysis."
+echo "To generate scripts for more copes, complete the pre-group analysis first:"
+echo "  python3 create_pre_group_voxelWise.py"
 echo ""
 echo "To submit all jobs, you can use:"
 echo "  for script in $SCRIPT_DIR/*.sh; do sbatch \$script; done"
