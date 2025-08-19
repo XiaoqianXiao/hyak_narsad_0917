@@ -105,12 +105,9 @@ DEFAULT_SLURM_PARAMS = {
 def get_subject_list(derivatives_dir):
     """Get list of subjects from derivatives directory."""
     subjects = []
-    # The derivatives_dir should already point to the fMRI_analysis directory
-    # or we need to construct the path correctly
-    if 'fMRI_analysis' in derivatives_dir:
-        first_level_dir = os.path.join(derivatives_dir, 'firstLevel')
-    else:
-        first_level_dir = os.path.join(derivatives_dir, 'fMRI_analysis', 'firstLevel')
+    # The derivatives_dir should point to the fMRI_analysis directory
+    # so we just need to append 'firstLevel'
+    first_level_dir = os.path.join(derivatives_dir, 'firstLevel')
     
     logger.info(f"Looking for first level directory at: {first_level_dir}")
     
@@ -468,6 +465,8 @@ Examples:
     else:
         # Get all subjects from derivatives directory
         logger.info(f"Scanning derivatives directory: {args.derivatives_dir}")
+        logger.info(f"Derivatives directory type: {type(args.derivatives_dir)}")
+        logger.info(f"Derivatives directory absolute: {os.path.abspath(args.derivatives_dir)}")
         subject_phase_pairs = get_subject_list(args.derivatives_dir)
         
         if args.phases:
