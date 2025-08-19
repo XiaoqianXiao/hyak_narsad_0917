@@ -151,10 +151,6 @@ def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, da
     script_name = f"pre_group_{subject}_{phase}.sh"
     script_path = os.path.join(script_dir, script_name)
     
-    # Convert host path to container path for output_dir
-    # Replace /gscratch/fang with /data for container paths
-    container_output_dir = output_dir.replace('/gscratch/fang', '/data')
-    
     # Container bind mounts
     container_binds = [
         "-B /gscratch/fang:/data",
@@ -163,6 +159,10 @@ def create_slurm_script(subject, phase, output_dir, script_dir, slurm_params, da
         "-B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/run_pre_group_voxelWise.py:/app/run_pre_group_voxelWise.py",
         "-B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad:/app/updated"
     ]
+    
+    # Convert host path to container path for output_dir
+    # Replace /gscratch/fang with /data for container paths
+    container_output_dir = output_dir.replace('/gscratch/fang', '/data')
     
     # Script content
     script_content = f"""#!/bin/bash
