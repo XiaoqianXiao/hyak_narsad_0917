@@ -178,7 +178,7 @@ export DATA_DIR=/data
 mkdir -p {host_output_dir}
 
 # Run the pre-group analysis for this subject and phase
-apptainer exec {' '.join(container_binds)} /gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif \\
+apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
     python3 /app/run_pre_group_voxelWise.py \\
     --output-dir {output_dir} \\
     --subject {subject} \\
@@ -244,14 +244,6 @@ Examples:
     )
     
     args = parser.parse_args()
-    
-    # Check if we're running in a container and adjust paths if needed
-    container_env = os.getenv('CONTAINER', 'false')
-    if container_env == 'true' or os.path.exists('/.dockerenv') or os.path.exists('/run/.containerenv'):
-        logger.info("Detected container environment")
-        # In container, prefer /tmp for script generation if output dir is read-only
-        if not os.access(os.path.dirname(output_dir), os.W_OK):
-            logger.warning("Output directory parent is not writable, will use /tmp for scripts")
     
     # Use container paths directly since this script runs inside the container
     logger.info("Using container paths directly")

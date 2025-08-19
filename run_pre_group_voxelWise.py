@@ -460,6 +460,13 @@ Examples:
         help='Specific phase to process'
     )
     
+    parser.add_argument(
+        '--data-source',
+        choices=['all', 'placebo', 'guess'],
+        default='all',
+        help='Data source to process (default: all)'
+    )
+    
     args = parser.parse_args()
     
     # Validate arguments
