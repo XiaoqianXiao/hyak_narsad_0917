@@ -186,17 +186,15 @@ def create_slurm_script(phase, cope_num, output_dir, script_dir, slurm_params, d
     # Replace /data with /gscratch/fang for host paths
     host_output_dir = output_dir.replace('/data', '/gscratch/fang')
 
-    # Build the command with optional include-columns
-    cmd_parts = [
-        "python3 /app/run_pre_group_voxelWise.py",
-        f"--output-dir {output_dir}",
-        f"--phase {phase}",
-        f"--cope {cope_num}",
-        f"--data-source {data_source}"
-    ]
+    # Build the command string
+    cmd_base = f"""python3 /app/run_pre_group_voxelWise.py \\
+    --output-dir {output_dir} \\
+    --phase {phase} \\
+    --cope {cope_num} \\
+    --data-source {data_source}"""
     
     if include_columns:
-        cmd_parts.append(f"--include-columns {include_columns}")
+        cmd_base += f" \\\n    --include-columns {include_columns}"
     
     # Script content
     script_content = f"""#!/bin/bash
@@ -226,7 +224,7 @@ mkdir -p {host_output_dir}
 
 # Run the pre-group analysis for this phase and cope
 apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
-    {chr(10).join(cmd_parts)}
+    {cmd_base}
 
 echo "Completed pre-group analysis for {phase} - cope{cope_num}"
 """
@@ -271,9 +269,9 @@ Examples:
     
     parser.add_argument(
         '--data-source',
-        choices=['all', 'placebo', 'guess'],
-        default='all',
-        help='Data source to process (default: all)'
+        choices=['standard', 'placebo', 'guess'],
+        default='standard',
+        help='Data source to process (default: standard)'
     )
     
     parser.add_argument(
