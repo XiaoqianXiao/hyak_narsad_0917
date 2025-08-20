@@ -27,7 +27,7 @@ def wf_data_prepare(output_dir, contrast, name="wf_data_prepare"):
     design_gen = Node(Function(input_names=['group_info', 'output_dir'],
                                output_names=['design_file', 'grp_file', 'con_file'],
                                function=create_dummy_design_files,
-                               imports=['import os', 'import numpy as np']),
+                               imports=['import os', 'import numpy as np', 'import pandas as pd']),
                       name='design_gen')
     design_gen.inputs.output_dir = output_dir
 
@@ -611,13 +611,102 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         factor_values = group_info[factor_name].values
         factor_levels[factor_name] = sorted(set(factor_values))
     
-    # Create design matrix - simplified version for now
+    # Create design matrix - self-contained version
     if n_factors == 1:
         # Single factor (e.g., two-group comparison)
-        design_matrix, contrasts = create_single_factor_design(group_info, factor_levels, column_names)
+        factor_name = list(factor_levels.keys())[0]
+        levels = factor_levels[factor_name]
+        n_levels = len(levels)
+        
+        # Create design matrix (one column per level)
+        design_matrix = []
+        for _, row in group_info.iterrows():
+            design_row = [0] * n_levels
+            factor_value = row[factor_name]
+            level_idx = levels.index(factor_value)
+            design_row[level_idx] = 1
+            design_matrix.append(design_row)
+        
+        # Create contrasts
+        contrasts = []
+        if n_levels == 2:
+            # Two-group comparison
+            contrasts = [
+                [1, -1],  # Level 1 > Level 2
+                [1, 0],   # Level 1 mean
+                [0, 1],   # Level 2 mean
+            ]
+        else:
+            # Multi-level factor
+            for i in range(n_levels):
+                for j in range(i+1, n_levels):
+                    contrast = [0] * n_levels
+                    contrast[i] = 1
+                    contrast[j] = -1
+                    contrasts.append(contrast)
+                    
     elif n_factors == 2:
-        # Two factors (e.g., 2x2 factorial)
-        design_matrix, contrasts = create_two_factor_design(group_info, factor_levels, column_names, contrast_type)
+        # Two factors (e.g., 2x2 factorial) - self-contained version
+        factor_names = list(factor_levels.keys())
+        factor1_name = factor_names[0]
+        factor2_name = factor_names[1]
+        
+        n_levels1 = len(factor_levels[factor1_name])
+        n_levels2 = len(factor_levels[factor2_name])
+        
+        # Create design matrix using cell-means coding
+        design_matrix = []
+        for _, row in group_info.iterrows():
+            design_row = [0] * (n_levels1 * n_levels2)
+            factor1_value = row[factor1_name]
+            factor2_value = row[factor2_name]
+            
+            # Find the cell index
+            level1_idx = factor_levels[factor1_name].index(factor1_value)
+            level2_idx = factor_levels[factor2_name].index(factor2_value)
+            cell_idx = level1_idx * n_levels2 + level2_idx
+            
+            design_row[cell_idx] = 1
+            design_matrix.append(design_row)
+        
+        # Create contrasts for 2x2 factorial design
+        contrasts = []
+        if n_levels1 == 2 and n_levels2 == 2:
+            # Contrast 1: Factor1 Level1 > Factor1 Level2
+            contrast1 = [1, 1, -1, -1]  # (Cell 0+1) vs (Cell 2+3)
+            contrasts.append(contrast1)
+            
+            # Contrast 2: Factor1 Level1 < Factor1 Level2 (reverse of Contrast 1)
+            contrast2 = [-1, -1, 1, 1]  # (Cell 2+3) vs (Cell 0+1)
+            contrasts.append(contrast2)
+            
+            # Contrast 3: Factor2 Level1 > Factor2 Level2
+            contrast3 = [1, -1, 1, -1]  # (Cell 0+2) vs (Cell 1+3)
+            contrasts.append(contrast3)
+            
+            # Contrast 4: Factor2 Level1 < Factor2 Level2 (reverse of Contrast 3)
+            contrast4 = [-1, 1, -1, 1]  # (Cell 1+3) vs (Cell 0+2)
+            contrasts.append(contrast4)
+            
+            # Contrast 5: Interaction
+            contrast5 = [1, -1, -1, 1]  # (Cell 0) - (Cell 1) - (Cell 2) + (Cell 3)
+            contrasts.append(contrast5)
+            
+            # Contrast 6: Opposite interaction (reverse of Contrast 5)
+            contrast6 = [-1, 1, 1, -1]  # -(Cell 0) + (Cell 1) + (Cell 2) - (Cell 3)
+            contrasts.append(contrast6)
+        else:
+            # For non-2x2 designs, use simple main effects
+            for i in range(n_levels1):
+                for j in range(i+1, n_levels1):
+                    contrast = [0] * (n_levels1 * n_levels2)
+                    # Main effect of factor 1
+                    for k in range(n_levels2):
+                        idx1 = i * n_levels2 + k
+                        idx2 = j * n_levels2 + k
+                        contrast[idx1] = 1
+                        contrast[idx2] = -1
+                    contrasts.append(contrast)
     else:
         # For 3+ factors, use a simple approach
         # Create a simple design matrix with one column per factor level
