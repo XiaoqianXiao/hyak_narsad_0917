@@ -37,13 +37,30 @@ TASKS=("phase2" "phase3")
 # Function to validate that required files exist in a cope directory
 validate_cope_directory() {
     local cope_dir="$1"
-    local required_files=("merged_copes.nii.gz" "merged_varcopes.nii.gz" "design.mat" "design.grp" "contrast.con")
+    local required_files=("merged_cope.nii.gz" "merged_varcope.nii.gz")
     
+    # Check for required merged files
     for file in "${required_files[@]}"; do
         if [[ ! -f "${cope_dir}/${file}" ]]; then
             return 1  # File missing
         fi
     done
+    
+    # Check for design files directory
+    if [[ ! -d "${cope_dir}/design_files" ]]; then
+        return 1  # Design files directory missing
+    fi
+    
+    # Check for required design files in the design_files subdirectory
+    local design_dir="${cope_dir}/design_files"
+    local design_files=("design.mat" "design.grp" "contrast.con")
+    
+    for file in "${design_files[@]}"; do
+        if [[ ! -f "${design_dir}/${file}" ]]; then
+            return 1  # Design file missing
+        fi
+    done
+    
     return 0  # All files present
 }
 
