@@ -53,53 +53,29 @@ nipype.config.set('execution', 'crashfile_format', 'txt')
 nipype.config.set('execution', 'crash_dir', '/tmp/nipype_crashes')
 nipype.config.set('execution', 'remove_unnecessary_outputs', 'false')
 
-def get_writable_crash_dir():
-    """Get a writable crash directory, trying multiple locations."""
-    crash_dirs = [
-        '/tmp/nipype_crashes',
-        '/scrubbed_dir/nipype_crashes',
-        '/tmp',
-        '/scrubbed_dir'
-    ]
-    
-    for crash_dir in crash_dirs:
-        try:
-            os.makedirs(crash_dir, exist_ok=True)
-            # Test write access
-            test_file = os.path.join(crash_dir, 'test_write.tmp')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
-            logger = logging.getLogger(__name__)
-            logger.info(f"Using crash directory: {crash_dir}")
-            return crash_dir
-        except Exception as e:
-            continue
-    
-    # If all else fails, use current directory
-    fallback_dir = os.path.join(os.getcwd(), 'nipype_crashes')
-    os.makedirs(fallback_dir, exist_ok=True)
-    logger = logging.getLogger(__name__)
-    logger.warning(f"Using fallback crash directory: {fallback_dir}")
-    return fallback_dir
-
-def verify_crash_dir_access(crash_dir):
-    """Verify that the crash directory is accessible and writable."""
+def get_workflow_crash_dir(workflow_dir):
+    """Get crash directory within the workflow directory."""
+    crash_dir = os.path.join(workflow_dir, 'nipype_crashes')
     try:
+        os.makedirs(crash_dir, exist_ok=True)
         # Test write access
         test_file = os.path.join(crash_dir, 'test_write.tmp')
         with open(test_file, 'w') as f:
             f.write('test')
         os.remove(test_file)
-        return True
+        logger.info(f"Using workflow crash directory: {crash_dir}")
+        return crash_dir
     except Exception as e:
-        logger.warning(f"Crash directory {crash_dir} is not accessible: {e}")
-        return False
+        logger.warning(f"Failed to create crash directory in {workflow_dir}: {e}")
+        # Fallback to workflow directory itself
+        logger.info(f"Using workflow directory as crash directory: {workflow_dir}")
+        return workflow_dir
 
-# Ensure the crash directory exists and is writable
-crash_dir = get_writable_crash_dir()
-os.environ['NIPYPE_CRASH_DIR'] = crash_dir
-nipype.config.set('execution', 'crash_dir', crash_dir)
+# Set Nipype to use relative crash directories by default
+# This ensures crash files are written relative to workflow directories
+nipype.config.set('execution', 'crash_dir', '.')
+nipype.config.set('execution', 'crashfile_format', 'txt')
+nipype.config.set('execution', 'remove_unnecessary_outputs', 'false')
 
 # Get the logger instance
 logger = logging.getLogger(__name__)
@@ -388,7 +364,11 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         
         # Set workflow parameters
         prepare_wf.base_dir = contrast_workflow_dir
-        prepare_wf.config['execution']['crash_dir'] = crash_dir
+        
+        # Set crash directory to be within the workflow directory
+        workflow_crash_dir = get_workflow_crash_dir(contrast_workflow_dir)
+        prepare_wf.config['execution']['crash_dir'] = workflow_crash_dir
+        
         prepare_wf.inputs.inputnode.in_copes = copes
         prepare_wf.inputs.inputnode.in_varcopes = varcopes
         prepare_wf.inputs.inputnode.group_info = group_info
@@ -399,15 +379,9 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         # Note: use_guess parameter removed as it's not needed for design generation
         
         # Final crash directory setting to ensure it's correct
-        prepare_wf.config['execution']['crash_dir'] = crash_dir
+        prepare_wf.config['execution']['crash_dir'] = workflow_crash_dir
         
-        # Verify crash directory access before running
-        if not verify_crash_dir_access(crash_dir):
-            logger.error(f"Cannot access crash directory {crash_dir}, workflow may fail")
-            # Try to find a new writable directory
-            new_crash_dir = get_writable_crash_dir()
-            prepare_wf.config['execution']['crash_dir'] = new_crash_dir
-            logger.info(f"Switched to crash directory: {new_crash_dir}")
+        logger.info(f"Workflow crash directory set to: {workflow_crash_dir}")
         
         logger.info(f"Running data preparation for task-{task}, contrast-{contrast}")
         prepare_wf.run(plugin='MultiProc', plugin_args={'n_procs': 4})
