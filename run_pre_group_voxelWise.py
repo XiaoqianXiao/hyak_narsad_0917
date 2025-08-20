@@ -485,8 +485,8 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         workflow_output_dir = os.path.join(contrast_workflow_dir, prepare_wf.name)
         
         if os.path.exists(workflow_output_dir):
-            # Create the final results directory structure
-            final_results_dir = os.path.join(contrast_results_dir, 'whole_brain')
+            # Use the contrast results directory directly (no need to add 'whole_brain' again)
+            final_results_dir = contrast_results_dir
             Path(final_results_dir).mkdir(parents=True, exist_ok=True)
             
             # Copy all files from workflow output to final results
@@ -692,15 +692,15 @@ Examples:
         if args.output_dir:
             results_dir = args.output_dir
         else:
-            # Base results directory - always include whole_brain
-            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel/whole_brain')
+            # Base results directory - start with groupLevel
+            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel')
             
-            # Add data source subdirectory if not 'standard'
+            # Add whole_brain and data source subdirectory if not 'standard'
             if args.data_source and args.data_source != 'standard':
-                results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
+                results_dir = os.path.join(base_results_dir, 'whole_brain', args.data_source.capitalize())
                 logger.info(f"Using data source specific results directory: {results_dir}")
             else:
-                results_dir = base_results_dir
+                results_dir = os.path.join(base_results_dir, 'whole_brain')
                 logger.info(f"Using standard results directory: {results_dir}")
         
         if args.workflow_dir:
