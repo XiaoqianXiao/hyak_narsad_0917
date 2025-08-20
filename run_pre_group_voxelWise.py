@@ -194,6 +194,13 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
                     # Filter for placebo subjects only
                     df_behav = df_behav[df_behav[drug_column] == 'Placebo']
                     logger.info(f"Filtered by data source '{data_source}': {len(df_behav)} subjects remaining")
+                    
+                    # Check if we have enough subjects after filtering
+                    if len(df_behav) == 0:
+                        logger.warning(f"No subjects found after filtering for '{data_source}'. "
+                                     f"Available drug conditions: {df_behav[drug_column].unique()}")
+                        logger.warning(f"Consider using --data-source standard instead")
+                        
                 elif data_source == 'guess':
                     # For guess analysis, we might want to filter by guess condition
                     # This could be customized based on your specific needs
@@ -236,12 +243,36 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
             df_behav['guess_id'] = df_behav['guess'].map(guess_map)
             logger.info(f"Guess conditions: {guess_levels.tolist()}")
         
-        # Validate include_columns
+        # Validate include_columns with smart column mapping
         if include_columns:
-            missing_columns = [col for col in include_columns if col not in df_behav.columns]
+            # Smart column name mapping for common variations
+            column_mapping = {
+                'gender_id': 'gender_code',  # Map gender_id to gender_code
+                'drug_id': 'drug_id',        # Keep drug_id as is
+                'group_id': 'group_id',      # Keep group_id as is
+                'subID': 'subID'             # Keep subID as is
+            }
+            
+            # Map requested columns to actual column names
+            mapped_columns = []
+            missing_columns = []
+            
+            for col in include_columns:
+                if col in df_behav.columns:
+                    mapped_columns.append(col)
+                elif col in column_mapping and column_mapping[col] in df_behav.columns:
+                    mapped_columns.append(column_mapping[col])
+                    logger.info(f"Mapped column '{col}' to '{column_mapping[col]}'")
+                else:
+                    missing_columns.append(col)
+            
             if missing_columns:
                 raise ValueError(f"Requested columns not found: {missing_columns}. "
-                               f"Available columns: {list(df_behav.columns)}")
+                               f"Available columns: {list(df_behav.columns)}. "
+                               f"Note: gender_id maps to gender_code")
+            
+            # Use mapped columns
+            include_columns = mapped_columns
         else:
             # Default columns: always include subID and group_id, add others if available
             include_columns = ['subID', 'group_id']
@@ -441,48 +472,45 @@ def main():
     """Main execution function."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description="Generic pre-group level fMRI analysis pipeline for NARSAD project. Can process all subjects/phases or specific subjects/phases.",
+        description="Pre-group level fMRI analysis pipeline for NARSAD project. Creates merged COPE/VARCOPE files and design matrices for group-level analysis. Supports 2x2 and 2x2x2 factorial designs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Filter by drug condition
-  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo
+  # Basic usage - all subjects, all phases
+  python run_pre_group_voxelWise.py
   
-  # Filter by group
-  python run_pre_group_voxelWise.py --filter-column group --filter-value Patients
+  # Process specific phase only
+  python run_pre_group_voxelWise.py --phase phase2
   
-  # Filter by guess condition
-  python run_pre_group_voxelWise.py --filter-column guess --filter-value High
+  # Process specific phase and contrast
+  python run_pre_group_voxelWise.py --phase phase2 --cope 1
   
-  # Specify which columns to include
-  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --include-columns group_id,drug_id
+  # Standard 2x2 factorial design: Group × Drug
+  python run_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id"
   
-  # Use data source filtering (placebo subjects only)
-  python run_pre_group_voxelWise.py --data-source placebo --phase phase2
+  # 2x2x2 factorial design: Group × Drug × Gender
+  python run_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id,gender_id"
   
-  # Use data source filtering with specific columns
-  python run_pre_group_voxelWise.py --data-source placebo --include-columns subID,group_id,drug_id
+  # Placebo-only analysis with 2x2 design
+  python run_pre_group_voxelWise.py --data-source placebo --phase phase2 --include-columns "subID,group_id,drug_id"
   
-  # Use data source filtering with guess analysis
-  python run_pre_group_voxelWise.py --data-source guess --phase phase3
+  # Placebo-only analysis with 2x2x2 design
+  python run_pre_group_voxelWise.py --data-source placebo --phase phase2 --include-columns "subID,group_id,drug_id,gender_id"
   
-  # Use standard data source (all subjects)
-  python run_pre_group_voxelWise.py --data-source standard --phase phase2
+  # Guess condition analysis
+  python run_pre_group_voxelWise.py --data-source guess --phase phase3 --include-columns "subID,group_id,guess_id"
+  
+  # Filter by specific drug condition
+  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --include-columns "subID,group_id,drug_id"
+  
+  # Filter by specific group
+  python run_pre_group_voxelWise.py --filter-column group --filter-value Patients --include-columns "subID,group_id,drug_id"
   
   # Custom output directory
-  python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --output-dir /custom/path
+  python run_pre_group_voxelWise.py --output-dir /custom/path --include-columns "subID,group_id,drug_id"
   
-  # Process specific subject and phase
-  python run_pre_group_voxelWise.py --subject sub-001 --phase phase2
-  
-  # Process specific subject for all phases
-  python run_pre_group_voxelWise.py --subject sub-001
-  
-  # Process specific phase for all subjects
-  python run_pre_group_voxelWise.py --phase phase3
-  
-  # No filtering (all subjects, all phases) - uses standard data source
-  python run_pre_group_voxelWise.py
+  # Process specific subject
+  python run_pre_group_voxelWise.py --subject N101 --phase phase2 --include-columns "subID,group_id,drug_id"
         """
     )
     
