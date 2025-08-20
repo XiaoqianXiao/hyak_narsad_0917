@@ -68,7 +68,16 @@ validate_cope_directory() {
 get_available_copes() {
     local task="$1"
     local base_dir="$2"
-    local pregroup_dir="${base_dir}/groupLevel"
+    local data_source="$3"
+    
+    # Build the pre-group directory path based on data source
+    local pregroup_dir
+    if [[ "$data_source" == "standard" ]]; then
+        pregroup_dir="${base_dir}/groupLevel/whole_brain"
+    else
+        pregroup_dir="${base_dir}/groupLevel/whole_brain/${data_source^}"  # Capitalize first letter
+    fi
+    
     local task_dir="${pregroup_dir}/task-${task}"
     
     if [[ ! -d "$task_dir" ]]; then
@@ -152,7 +161,7 @@ EXAMPLES:
 
 NOTES:
     - Scripts are only generated for copes that have completed pre-group analysis
-    - Expected pre-group directory structure: {base-dir}/groupLevel/task-{phase}/cope{cope_num}/
+    - Expected pre-group directory structure: {base-dir}/groupLevel/whole_brain/{data-source}/task-{phase}/cope{cope_num}/
     - Run pre-group analysis first using create_pre_group_voxelWise.py
 
 EOF
@@ -304,10 +313,14 @@ echo "Creating logs directory in: $SCRIPT_DIR/logs"
 SCRIPT_COUNT=0
 for task in "${TASKS[@]}"; do
     # Discover available copes from pre-group analysis results
-    CONTRASTS=$(get_available_copes "$task" "$BASE_DIR")
+    CONTRASTS=$(get_available_copes "$task" "$BASE_DIR" "$DATA_SOURCE")
     if [[ -z "$CONTRASTS" ]]; then
         echo "Warning: No pre-group results found for task: $task"
-        echo "  Expected directory: ${BASE_DIR}/groupLevel/task-${task}/"
+        if [[ "$DATA_SOURCE" == "standard" ]]; then
+            echo "  Expected directory: ${BASE_DIR}/groupLevel/whole_brain/task-${task}/"
+        else
+            echo "  Expected directory: ${BASE_DIR}/groupLevel/whole_brain/${DATA_SOURCE^}/task-${task}/"
+        fi
         continue
     fi
     
