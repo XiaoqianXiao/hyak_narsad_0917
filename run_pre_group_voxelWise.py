@@ -41,18 +41,67 @@ from templateflow.api import get as tpl_get, templates as get_tpl_list
 import nipype
 import os
 
+# Configure logging first
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 # Set crash directory to a writable location
 os.environ['NIPYPE_CRASH_DIR'] = '/tmp/nipype_crashes'
 nipype.config.set('execution', 'crashfile_format', 'txt')
 nipype.config.set('execution', 'crash_dir', '/tmp/nipype_crashes')
 nipype.config.set('execution', 'remove_unnecessary_outputs', 'false')
-nipype.config.set('execution', 'crashfile_format', 'txt')
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+def get_writable_crash_dir():
+    """Get a writable crash directory, trying multiple locations."""
+    crash_dirs = [
+        '/tmp/nipype_crashes',
+        '/scrubbed_dir/nipype_crashes',
+        '/tmp',
+        '/scrubbed_dir'
+    ]
+    
+    for crash_dir in crash_dirs:
+        try:
+            os.makedirs(crash_dir, exist_ok=True)
+            # Test write access
+            test_file = os.path.join(crash_dir, 'test_write.tmp')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger = logging.getLogger(__name__)
+            logger.info(f"Using crash directory: {crash_dir}")
+            return crash_dir
+        except Exception as e:
+            continue
+    
+    # If all else fails, use current directory
+    fallback_dir = os.path.join(os.getcwd(), 'nipype_crashes')
+    os.makedirs(fallback_dir, exist_ok=True)
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Using fallback crash directory: {fallback_dir}")
+    return fallback_dir
+
+def verify_crash_dir_access(crash_dir):
+    """Verify that the crash directory is accessible and writable."""
+    try:
+        # Test write access
+        test_file = os.path.join(crash_dir, 'test_write.tmp')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        return True
+    except Exception as e:
+        logger.warning(f"Crash directory {crash_dir} is not accessible: {e}")
+        return False
+
+# Ensure the crash directory exists and is writable
+crash_dir = get_writable_crash_dir()
+os.environ['NIPYPE_CRASH_DIR'] = crash_dir
+nipype.config.set('execution', 'crash_dir', crash_dir)
+
+# Get the logger instance
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -339,6 +388,7 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         
         # Set workflow parameters
         prepare_wf.base_dir = contrast_workflow_dir
+        prepare_wf.config['execution']['crash_dir'] = crash_dir
         prepare_wf.inputs.inputnode.in_copes = copes
         prepare_wf.inputs.inputnode.in_varcopes = varcopes
         prepare_wf.inputs.inputnode.group_info = group_info
@@ -347,6 +397,17 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         
         # Set analysis-specific parameters
         # Note: use_guess parameter removed as it's not needed for design generation
+        
+        # Final crash directory setting to ensure it's correct
+        prepare_wf.config['execution']['crash_dir'] = crash_dir
+        
+        # Verify crash directory access before running
+        if not verify_crash_dir_access(crash_dir):
+            logger.error(f"Cannot access crash directory {crash_dir}, workflow may fail")
+            # Try to find a new writable directory
+            new_crash_dir = get_writable_crash_dir()
+            prepare_wf.config['execution']['crash_dir'] = new_crash_dir
+            logger.info(f"Switched to crash directory: {new_crash_dir}")
         
         logger.info(f"Running data preparation for task-{task}, contrast-{contrast}")
         prepare_wf.run(plugin='MultiProc', plugin_args={'n_procs': 4})
@@ -585,6 +646,19 @@ Examples:
                 
                 Path(contrast_results_dir).mkdir(parents=True, exist_ok=True)
                 Path(contrast_workflow_dir).mkdir(parents=True, exist_ok=True)
+                
+                # Check if workflow directory is writable
+                try:
+                    test_file = os.path.join(contrast_workflow_dir, 'test_write.tmp')
+                    with open(test_file, 'w') as f:
+                        f.write('test')
+                    os.remove(test_file)
+                except Exception as e:
+                    logger.warning(f"Workflow directory {contrast_workflow_dir} is not writable: {e}")
+                    # Use a fallback directory
+                    contrast_workflow_dir = os.path.join('/tmp', f'workflow_{task}_cope{contrast}')
+                    Path(contrast_workflow_dir).mkdir(parents=True, exist_ok=True)
+                    logger.info(f"Using fallback workflow directory: {contrast_workflow_dir}")
                 
                 # Collect data for this contrast
                 copes, varcopes = collect_task_data(
