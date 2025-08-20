@@ -226,11 +226,7 @@ mkdir -p {host_output_dir}
 
 # Run the pre-group analysis for this phase and cope
 apptainer exec {' '.join(container_binds)} {slurm_params['container']} \\
-    python3 /app/run_pre_group_voxelWise.py \\
-    --output-dir {output_dir} \\
-    --phase {phase} \\
-    --cope {cope_num} \\
-    --data-source {data_source}
+    {chr(10).join(cmd_parts)}
 
 echo "Completed pre-group analysis for {phase} - cope{cope_num}"
 """
