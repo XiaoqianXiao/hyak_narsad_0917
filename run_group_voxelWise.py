@@ -89,8 +89,8 @@ DATA_SOURCE_CONFIGS = {
     },
     'guess': {
         'description': 'Analysis including guess condition',
-        'results_subdir': 'groupLevel',
-        'workflows_subdir': 'groupLevel',
+        'results_subdir': 'groupLevel/Guess',
+        'workflows_subdir': 'groupLevel/Guess',
         'requires_varcope': True,
         'requires_grp': True
     }

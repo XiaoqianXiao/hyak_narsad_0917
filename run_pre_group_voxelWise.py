@@ -154,7 +154,7 @@ CONTRAST_RANGE = list(range(1, 43))  # Contrasts 1-42 (fallback)
 # DATA LOADING FUNCTIONS
 # =============================================================================
 
-def load_behavioral_data(filter_column=None, filter_value=None, include_columns=None):
+def load_behavioral_data(filter_column=None, filter_value=None, include_columns=None, data_source=None):
     """
     Load and prepare behavioral data for analysis with flexible filtering.
     
@@ -162,6 +162,7 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
         filter_column (str): Column name to filter on (e.g., 'Drug', 'group', 'guess')
         filter_value (str): Value to filter for (e.g., 'Placebo', 'Patients', 'High')
         include_columns (list): List of columns to include in group_info
+        data_source (str): Data source type ('standard', 'placebo', 'guess')
     
     Returns:
         pandas.DataFrame: Filtered behavioral data with appropriate mappings
@@ -180,7 +181,27 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
         # Merge behavioral data
         df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
         
-        # Apply filtering if specified
+        # Apply data source filtering if specified
+        if data_source and data_source != 'standard':
+            drug_column = None
+            if 'drug_condition' in df_behav.columns:
+                drug_column = 'drug_condition'
+            elif 'Drug' in df_behav.columns:
+                drug_column = 'Drug'
+            
+            if drug_column:
+                if data_source == 'placebo':
+                    # Filter for placebo subjects only
+                    df_behav = df_behav[df_behav[drug_column] == 'Placebo']
+                    logger.info(f"Filtered by data source '{data_source}': {len(df_behav)} subjects remaining")
+                elif data_source == 'guess':
+                    # For guess analysis, we might want to filter by guess condition
+                    # This could be customized based on your specific needs
+                    logger.info(f"Data source '{data_source}' selected - no additional filtering applied")
+            else:
+                logger.warning(f"Drug column not found, cannot filter by data source '{data_source}'")
+        
+        # Apply additional filtering if specified
         if filter_column and filter_value:
             if filter_column not in df_behav.columns:
                 raise ValueError(f"Filter column '{filter_column}' not found in behavioral data. "
@@ -436,6 +457,18 @@ Examples:
   # Specify which columns to include
   python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --include-columns group_id,drug_id
   
+  # Use data source filtering (placebo subjects only)
+  python run_pre_group_voxelWise.py --data-source placebo --phase phase2
+  
+  # Use data source filtering with specific columns
+  python run_pre_group_voxelWise.py --data-source placebo --include-columns subID,group_id,drug_id
+  
+  # Use data source filtering with guess analysis
+  python run_pre_group_voxelWise.py --data-source guess --phase phase3
+  
+  # Use standard data source (all subjects)
+  python run_pre_group_voxelWise.py --data-source standard --phase phase2
+  
   # Custom output directory
   python run_pre_group_voxelWise.py --filter-column Drug --filter-value Placebo --output-dir /custom/path
   
@@ -448,7 +481,7 @@ Examples:
   # Process specific phase for all subjects
   python run_pre_group_voxelWise.py --phase phase3
   
-  # No filtering (all subjects, all phases)
+  # No filtering (all subjects, all phases) - uses standard data source
   python run_pre_group_voxelWise.py
         """
     )
@@ -497,9 +530,9 @@ Examples:
     
     parser.add_argument(
         '--data-source',
-        choices=['all', 'placebo', 'guess'],
-        default='all',
-        help='Data source to process (default: all)'
+        choices=['standard', 'placebo', 'guess'],
+        default='standard',
+        help='Data source to process: standard (default), placebo (Drug==Placebo only), or guess (guess condition analysis)'
     )
     
     parser.add_argument(
@@ -531,19 +564,40 @@ Examples:
         else:
             analysis_desc = "all subjects (no filtering)"
         
+        # Add data source information to description
+        if args.data_source and args.data_source != 'standard':
+            analysis_desc += f", data source: {args.data_source}"
+        
         logger.info(f"Starting pre-group level analysis pipeline: {analysis_desc}")
         
-        # Set up directories
+        # Set up directories based on data source
         if args.output_dir:
             results_dir = args.output_dir
         else:
-            results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel')
+            # Base results directory
+            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel')
+            
+            # Add data source subdirectory if not 'standard'
+            if args.data_source and args.data_source != 'standard':
+                results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
+                logger.info(f"Using data source specific results directory: {results_dir}")
+            else:
+                results_dir = base_results_dir
+                logger.info(f"Using standard results directory: {results_dir}")
         
         if args.workflow_dir:
             workflow_dir = args.workflow_dir
         else:
-            # Use a writable location for workflow directory if SCRUBBED_DIR is read-only
-            workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows/groupLevel')
+            # Base workflow directory
+            base_workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows/groupLevel')
+            
+            # Add data source subdirectory if not 'standard'
+            if args.data_source and args.data_source != 'standard':
+                workflow_dir = os.path.join(base_workflow_dir, args.data_source.capitalize())
+                logger.info(f"Using data source specific workflow directory: {workflow_dir}")
+            else:
+                workflow_dir = base_workflow_dir
+                logger.info(f"Using standard workflow directory: {workflow_dir}")
         
         # Create workflow directory (use temporary location to avoid read-only issues)
         Path(workflow_dir).mkdir(parents=True, exist_ok=True)
@@ -551,7 +605,7 @@ Examples:
         
         # Load data
         df_behav, final_include_columns = load_behavioral_data(
-            args.filter_column, args.filter_value, include_columns
+            args.filter_column, args.filter_value, include_columns, args.data_source
         )
         glayout, subject_list = load_first_level_data()
         
