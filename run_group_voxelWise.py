@@ -75,22 +75,22 @@ SCRUBBED_DIR = '/scrubbed_dir'
 DATA_SOURCE_CONFIGS = {
     'standard': {
         'description': 'Standard analysis with all subjects',
-        'results_subdir': 'groupLevel',
-        'workflows_subdir': 'groupLevel',
+        'results_subdir': 'groupLevel/whole_brain',
+        'workflows_subdir': 'groupLevel/whole_brain',
         'requires_varcope': True,
         'requires_grp': True
     },
     'placebo': {
         'description': 'Placebo condition only analysis',
-        'results_subdir': 'groupLevel/Placebo',
-        'workflows_subdir': 'groupLevel/Placebo',
+        'results_subdir': 'groupLevel/whole_brain/Placebo',
+        'workflows_subdir': 'groupLevel/whole_brain/Placebo',
         'requires_varcope': True,
         'requires_grp': True
     },
     'guess': {
         'description': 'Analysis including guess condition',
-        'results_subdir': 'groupLevel/Guess',
-        'workflows_subdir': 'groupLevel/Guess',
+        'results_subdir': 'groupLevel/whole_brain/Guess',
+        'workflows_subdir': 'groupLevel/whole_brain/Guess',
         'requires_varcope': True,
         'requires_grp': True
     }
@@ -310,9 +310,9 @@ def get_standard_paths(task, contrast, base_dir, data_source):
     # Use TemplateFlow to get group mask path
     group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
     
-    # Define paths - whole_brain moved right after groupLevel
-    result_dir = os.path.join(results_dir, 'whole_brain', f'task-{task}', f'cope{contrast}')
-    workflow_dir = os.path.join(workflows_dir, 'whole_brain', f'task-{task}', f'cope{contrast}')
+    # Define paths - whole_brain is already included in results_subdir
+    result_dir = os.path.join(results_dir, f'task-{task}', f'cope{contrast}')
+    workflow_dir = os.path.join(workflows_dir, f'task-{task}', f'cope{contrast}')
     
     paths = {
         'result_dir': result_dir,

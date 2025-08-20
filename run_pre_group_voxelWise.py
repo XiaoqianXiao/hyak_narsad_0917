@@ -700,10 +700,22 @@ Examples:
         
         # Always add data source components to the base directory
         if args.data_source and args.data_source != 'standard':
-            results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
+            # Check if base_results_dir already contains 'whole_brain'
+            if 'whole_brain' in base_results_dir:
+                # Base already has whole_brain, just add data source
+                results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
+            else:
+                # Base doesn't have whole_brain, add it along with data source
+                results_dir = os.path.join(base_results_dir, 'whole_brain', args.data_source.capitalize())
             logger.info(f"Using data source specific results directory: {results_dir}")
         else:
-            results_dir = base_results_dir
+            # Check if base_results_dir already contains 'whole_brain'
+            if 'whole_brain' in base_results_dir:
+                # Base already has whole_brain, use as is
+                results_dir = base_results_dir
+            else:
+                # Base doesn't have whole_brain, add it
+                results_dir = os.path.join(base_results_dir, 'whole_brain')
             logger.info(f"Using standard results directory: {results_dir}")
         
         if args.workflow_dir:
