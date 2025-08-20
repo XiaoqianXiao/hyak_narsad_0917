@@ -460,6 +460,15 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         # Set analysis-specific parameters
         # Note: use_guess parameter removed as it's not needed for design generation
         
+        # Clear any existing cache to avoid conflicts
+        cache_dir = os.path.join(contrast_workflow_dir, prepare_wf.name)
+        if os.path.exists(cache_dir):
+            try:
+                shutil.rmtree(cache_dir)
+                logger.info(f"Cleared existing cache: {cache_dir}")
+            except Exception as e:
+                logger.warning(f"Could not clear cache: {e}")
+        
         # Final crash directory setting to ensure it's correct
         prepare_wf.config['execution']['crash_dir'] = workflow_crash_dir
         
