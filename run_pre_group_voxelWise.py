@@ -692,22 +692,22 @@ Examples:
         if args.output_dir:
             results_dir = args.output_dir
         else:
-            # Base results directory - start with groupLevel
-            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel')
+            # Standard base: groupLevel/whole_brain
+            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel/whole_brain')
             
-            # Add whole_brain and data source subdirectory if not 'standard'
+            # Add data source subdirectory if not 'standard'
             if args.data_source and args.data_source != 'standard':
-                results_dir = os.path.join(base_results_dir, 'whole_brain', args.data_source.capitalize())
+                results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
                 logger.info(f"Using data source specific results directory: {results_dir}")
             else:
-                results_dir = os.path.join(base_results_dir, 'whole_brain')
+                results_dir = base_results_dir
                 logger.info(f"Using standard results directory: {results_dir}")
         
         if args.workflow_dir:
             workflow_dir = args.workflow_dir
         else:
-            # Base workflow directory
-            base_workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows/groupLevel')
+            # Standard base: groupLevel/whole_brain
+            base_workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows/groupLevel/whole_brain')
             
             # Add data source subdirectory if not 'standard'
             if args.data_source and args.data_source != 'standard':
