@@ -28,6 +28,7 @@ import os
 import shutil
 import logging
 import argparse
+import glob
 from pathlib import Path
 from bids.layout import BIDSLayout
 import pandas as pd
@@ -468,6 +469,46 @@ def run_data_preparation_workflow(task, contrast, group_info, copes, varcopes,
         prepare_wf.run(plugin='MultiProc', plugin_args={'n_procs': 4})
         logger.info(f"Completed data preparation for task-{task}, contrast-{contrast}")
         
+        # Copy results from workflow directory to final results directory
+        logger.info(f"Copying results from workflow directory to final results directory")
+        
+        # Get the workflow output directory
+        workflow_output_dir = os.path.join(contrast_workflow_dir, prepare_wf.name)
+        
+        if os.path.exists(workflow_output_dir):
+            # Create the final results directory structure
+            final_results_dir = os.path.join(contrast_results_dir, 'whole_brain')
+            Path(final_results_dir).mkdir(parents=True, exist_ok=True)
+            
+            # Copy all files from workflow output to final results
+            import shutil
+            import glob
+            try:
+                # Copy merged files
+                for file_pattern in ['merged_cope*.nii.gz', 'merged_varcope*.nii.gz']:
+                    for file_path in glob.glob(os.path.join(workflow_output_dir, file_pattern)):
+                        filename = os.path.basename(file_path)
+                        dest_path = os.path.join(final_results_dir, filename)
+                        shutil.copy2(file_path, dest_path)
+                        logger.info(f"Copied {filename} to {dest_path}")
+                
+                # Copy design files
+                design_source_dir = os.path.join(workflow_output_dir, 'design_files')
+                if os.path.exists(design_source_dir):
+                    design_dest_dir = os.path.join(final_results_dir, 'design_files')
+                    if os.path.exists(design_dest_dir):
+                        shutil.rmtree(design_dest_dir)
+                    shutil.copytree(design_source_dir, design_dest_dir)
+                    logger.info(f"Copied design files to {design_dest_dir}")
+                
+                logger.info(f"Successfully copied all results to: {final_results_dir}")
+                
+            except Exception as e:
+                logger.error(f"Failed to copy results: {e}")
+                raise
+        else:
+            logger.warning(f"Workflow output directory not found: {workflow_output_dir}")
+        
     except Exception as e:
         logger.error(f"Failed to run data preparation workflow for task-{task}, contrast-{contrast}: {e}")
         raise
@@ -631,8 +672,8 @@ Examples:
         if args.output_dir:
             results_dir = args.output_dir
         else:
-            # Base results directory
-            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel')
+            # Base results directory - always include whole_brain
+            base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel/whole_brain')
             
             # Add data source subdirectory if not 'standard'
             if args.data_source and args.data_source != 'standard':
