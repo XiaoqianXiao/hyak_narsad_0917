@@ -510,6 +510,9 @@ Examples:
     
     args = parser.parse_args()
     
+    # Debug: Log all received arguments
+    logger.info(f"Received arguments: {vars(args)}")
+    
     # Validate arguments
     if args.filter_column and not args.filter_value:
         parser.error("--filter-column requires --filter-value")
@@ -600,6 +603,7 @@ Examples:
             task_contrast_range = get_contrast_range(task)
             
             # If specific cope requested, filter to that cope only
+            logger.info(f"Debug: args.cope = {args.cope}, type = {type(args.cope)}")
             if args.cope:
                 if args.cope in task_contrast_range:
                     task_contrast_range = [args.cope]
