@@ -151,11 +151,13 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 logger.error("Group file not found but required for FLAMEO analysis")
                 raise ValueError("Group file required for FLAMEO analysis")
         
-        # Create directories
+        # Create directories FIRST
+        logger.info(f"Creating results directory: {paths['result_dir']}")
         Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Creating workflow directory: {paths['workflow_dir']}")
         Path(paths['workflow_dir']).mkdir(parents=True, exist_ok=True)
         
-        # Verify directories are writable
+        # Verify directories are writable AFTER creation
         try:
             test_file = os.path.join(paths['result_dir'], 'test_write.tmp')
             with open(test_file, 'w') as f:
