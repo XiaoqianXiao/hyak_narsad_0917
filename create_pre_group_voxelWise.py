@@ -20,6 +20,9 @@ USAGE:
     # Create scripts with limited factors (2x2 factorial design)
     python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id"
     
+    # Create 2x2 drug × gender design for placebo data
+    python3 create_pre_group_voxelWise.py --include-columns "subID,drug_id,gender_id" --data-source placebo
+    
     # Combine multiple options
     python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id" --phases phase2 --data-source standard
     
@@ -41,6 +44,21 @@ EXAMPLES:
     
     # Process guess data only
     python3 create_pre_group_voxelWise.py --data-source guess
+    
+    # Create 2x2 factorial design (Group × Drug)
+    python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id"
+    
+    # Create 2x2 factorial design for specific phase
+    python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id" --phases phase2
+    
+    # Create 2x2 factorial design with placebo data source
+    python3 create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id" --data-source placebo
+    
+    # Create 2x2 drug × gender design for placebo data
+    python3 create_pre_group_voxelWise.py --include-columns "subID,drug_id,gender_id" --data-source placebo
+    
+    # Create 2x2 drug × gender design for specific phase (placebo)
+    python3 create_pre_group_voxelWise.py --include-columns "subID,drug_id,gender_id" --phases phase2 --data-source placebo
     
     # Test with dry run first
     python3 create_pre_group_voxelWise.py --dry-run
@@ -243,6 +261,15 @@ Examples:
   
   # Create scripts for specific data source
   python create_pre_group_voxelWise.py --data-source placebo
+  
+  # Create 2x2 factorial design (Group × Drug)
+  python create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id"
+  
+  # Create 2x2 drug × gender design for placebo data
+  python create_pre_group_voxelWise.py --include-columns "subID,drug_id,gender_id" --data-source placebo
+  
+  # Combine multiple options for 2x2 design
+  python create_pre_group_voxelWise.py --include-columns "subID,group_id,drug_id" --phases phase2 --data-source standard
         """
     )
     
