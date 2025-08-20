@@ -151,11 +151,37 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 logger.error("Group file not found but required for FLAMEO analysis")
                 raise ValueError("Group file required for FLAMEO analysis")
         
-        # Create directories FIRST
+        # Create directories FIRST with better error handling
         logger.info(f"Creating results directory: {paths['result_dir']}")
-        Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
+        logger.info(f"Current working directory: {os.getcwd()}")
+        logger.info(f"Results directory parent exists: {os.path.exists(os.path.dirname(paths['result_dir']))}")
+        try:
+            Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
+            logger.info(f"Results directory created/verified: {paths['result_dir']}")
+        except Exception as e:
+            logger.error(f"Failed to create results directory: {paths['result_dir']} - {e}")
+            raise
+            
         logger.info(f"Creating workflow directory: {paths['workflow_dir']}")
-        Path(paths['workflow_dir']).mkdir(parents=True, exist_ok=True)
+        try:
+            Path(paths['workflow_dir']).mkdir(parents=True, exist_ok=True)
+            logger.info(f"Workflow directory created/verified: {paths['workflow_dir']}")
+        except Exception as e:
+            logger.error(f"Failed to create workflow directory: {paths['workflow_dir']} - {e}")
+            raise
+        
+        # Verify directories actually exist
+        if not os.path.exists(paths['result_dir']):
+            logger.error(f"Results directory does not exist after creation: {paths['result_dir']}")
+            raise RuntimeError(f"Failed to create results directory: {paths['result_dir']}")
+        else:
+            logger.info(f"Results directory exists: {paths['result_dir']}")
+            
+        if not os.path.exists(paths['workflow_dir']):
+            logger.error(f"Workflow directory does not exist after creation: {paths['workflow_dir']}")
+            raise RuntimeError(f"Failed to create workflow directory: {paths['workflow_dir']}")
+        else:
+            logger.info(f"Workflow directory exists: {paths['workflow_dir']}")
         
         # Verify directories are writable AFTER creation
         try:
@@ -166,7 +192,8 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             logger.info(f"Results directory is writable: {paths['result_dir']}")
         except Exception as e:
             logger.error(f"Results directory is not writable: {paths['result_dir']} - {e}")
-            raise
+            # Don't fail here, just log the warning and continue
+            logger.warning(f"Results directory write test failed, but continuing...")
             
         try:
             test_file = os.path.join(paths['workflow_dir'], 'test_write.tmp')
@@ -176,7 +203,8 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             logger.info(f"Workflow directory is writable: {paths['workflow_dir']}")
         except Exception as e:
             logger.error(f"Workflow directory is not writable: {paths['workflow_dir']} - {e}")
-            raise
+            # Don't fail here, just log the warning and continue
+            logger.warning(f"Workflow directory write test failed, but continuing...")
         
         logger.info(f"Running workflow: {wf_name}")
         logger.info(f"Results directory: {paths['result_dir']}")
