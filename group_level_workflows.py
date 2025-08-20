@@ -250,9 +250,9 @@ def wf_flameo(output_dir, name="wf_flameo"):
 
         # Outputs to DataSink
         (outputnode, datasink, [('zstats', 'stats.@zstats'),
-                                ('cluster_thresh', 'cluster_results.@thresh'),
-                                ('cluster_index', 'cluster_results.@index'),
-                                ('cluster_peaks', 'cluster_results.@peaks')])
+                                ('cluster_thresh', 'cluster_results.threshold_file'),
+                                ('cluster_index', 'cluster_results.index_file'),
+                                ('cluster_peaks', 'cluster_results.localmax_txt_file')])
     ])
     return wf
 

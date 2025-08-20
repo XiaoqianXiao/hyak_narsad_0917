@@ -126,6 +126,9 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         wf = wf_func(output_dir=paths['workflow_dir'], name=wf_name)
         wf.base_dir = paths['workflow_dir']
         
+        # Set crash directory to workflow directory to avoid permission issues
+        wf.config['execution']['crash_dir'] = paths['workflow_dir']
+        
         # The DataSink will now write to the workflow directory (which is writable)
         # After completion, we'll copy results to the final results directory
         
@@ -212,10 +215,17 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         
         # Run the workflow
         logger.info(f"Starting workflow execution with plugin settings: {PLUGIN_SETTINGS}")
-        result = wf.run(**PLUGIN_SETTINGS)
-        
-        logger.info(f"Workflow completed successfully: {wf_name}")
-        logger.info(f"Workflow result: {result}")
+        try:
+            result = wf.run(**PLUGIN_SETTINGS)
+            logger.info(f"Workflow completed successfully: {wf_name}")
+            logger.info(f"Workflow result: {result}")
+        except Exception as e:
+            logger.error(f"Workflow execution failed: {e}")
+            # Check if there are crash files
+            crash_files = glob.glob(os.path.join(paths['workflow_dir'], 'crash-*.pklz'))
+            if crash_files:
+                logger.error(f"Found crash files: {crash_files}")
+            raise
         
         # Check if workflow actually completed by looking at the result
         if result is None:
@@ -225,6 +235,8 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         
         # Copy results from workflow directory to final results directory
         workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
+        logger.info(f"Looking for workflow output in: {workflow_output_dir}")
+        
         if os.path.exists(workflow_output_dir):
             logger.info(f"Copying results from workflow directory: {workflow_output_dir}")
             logger.info(f"To final results directory: {paths['result_dir']}")
@@ -233,16 +245,16 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             workflow_contents = os.listdir(workflow_output_dir)
             logger.info(f"Workflow output directory contains: {workflow_contents}")
             
-            # Check for specific clustering results
-            if 'cluster_results' in workflow_contents:
-                cluster_dir = os.path.join(workflow_output_dir, 'cluster_results')
-                if os.path.exists(cluster_dir):
-                    cluster_files = os.listdir(cluster_dir)
-                    logger.info(f"Cluster results directory contains: {cluster_files}")
-                else:
-                    logger.warning("Cluster results directory not found")
+                    # Check for stats directory (FLAMEO outputs)
+        if 'stats' in workflow_contents:
+            stats_dir = os.path.join(workflow_output_dir, 'stats')
+            if os.path.exists(stats_dir):
+                stats_files = os.listdir(stats_dir)
+                logger.info(f"Stats directory contains: {stats_files}")
             else:
-                logger.warning("No cluster_results directory found in workflow output")
+                logger.warning("Stats directory not found")
+        else:
+            logger.warning("No stats directory found in workflow output")
             
             # Check for stats directory
             if 'stats' in workflow_contents:
@@ -255,17 +267,28 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             else:
                 logger.warning("No stats directory found in workflow output")
             
+            # Check for any other subdirectories that might contain results
+            for item in workflow_contents:
+                item_path = os.path.join(workflow_output_dir, item)
+                if os.path.isdir(item_path):
+                    subdir_contents = os.listdir(item_path)
+                    logger.info(f"Subdirectory '{item}' contains: {subdir_contents}")
+            
             # Create final results directory if it doesn't exist
             Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
             
             # Copy all files from workflow output to final results
             import shutil
             try:
+                logger.info(f"About to copy from {workflow_output_dir} to {paths['result_dir']}")
+                
                 if os.path.exists(paths['result_dir']):
+                    logger.info(f"Removing existing results directory: {paths['result_dir']}")
                     # Remove existing results directory contents
                     shutil.rmtree(paths['result_dir'])
                 
                 # Copy entire workflow output directory
+                logger.info(f"Executing: shutil.copytree({workflow_output_dir}, {paths['result_dir']})")
                 shutil.copytree(workflow_output_dir, paths['result_dir'])
                 logger.info(f"Successfully copied results to: {paths['result_dir']}")
                 
@@ -273,11 +296,22 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 if os.path.exists(paths['result_dir']):
                     result_files = os.listdir(paths['result_dir'])
                     logger.info(f"Final results directory contains: {result_files}")
+                    
+                    # Check if clustering results made it to the final directory
+                    final_cluster_dir = os.path.join(paths['result_dir'], 'cluster_results')
+                    if os.path.exists(final_cluster_dir):
+                        final_cluster_files = os.listdir(final_cluster_dir)
+                        logger.info(f"Final cluster_results directory contains: {final_cluster_files}")
+                    else:
+                        logger.warning("Final cluster_results directory not found after copy")
                 else:
                     logger.warning(f"Final results directory does not exist after copy")
                     
             except Exception as e:
                 logger.error(f"Failed to copy results: {e}")
+                logger.error(f"Exception type: {type(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
         else:
             logger.warning(f"Workflow output directory not found: {workflow_output_dir}")
