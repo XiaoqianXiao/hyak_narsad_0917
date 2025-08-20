@@ -666,14 +666,25 @@ Examples:
             include_columns = [col.strip() for col in args.include_columns.split(',')]
         
         # Create analysis description
+        filtering_applied = []
+        
+        # Check for explicit column filtering
         if args.filter_column and args.filter_value:
-            analysis_desc = f"filtered by {args.filter_column}={args.filter_value}"
+            filtering_applied.append(f"{args.filter_column}={args.filter_value}")
+        
+        # Check for data source filtering
+        if args.data_source and args.data_source != 'standard':
+            if args.data_source == 'placebo':
+                filtering_applied.append("placebo subjects only")
+            elif args.data_source == 'guess':
+                filtering_applied.append("guess condition filtering")
+            else:
+                filtering_applied.append(f"data source: {args.data_source}")
+        
+        if filtering_applied:
+            analysis_desc = f"filtered by {', '.join(filtering_applied)}"
         else:
             analysis_desc = "all subjects (no filtering)"
-        
-        # Add data source information to description
-        if args.data_source and args.data_source != 'standard':
-            analysis_desc += f", data source: {args.data_source}"
         
         logger.info(f"Starting pre-group level analysis pipeline: {analysis_desc}")
         
