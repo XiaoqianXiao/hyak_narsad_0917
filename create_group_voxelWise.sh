@@ -34,6 +34,19 @@ DEFAULT_ANALYSIS_TYPES=("randomise" "flameo")
 # Tasks
 TASKS=("phase2" "phase3")
 
+# Function to validate that required files exist in a cope directory
+validate_cope_directory() {
+    local cope_dir="$1"
+    local required_files=("merged_copes.nii.gz" "merged_varcopes.nii.gz" "design.mat" "design.grp" "contrast.con")
+    
+    for file in "${required_files[@]}"; do
+        if [[ ! -f "${cope_dir}/${file}" ]]; then
+            return 1  # File missing
+        fi
+    done
+    return 0  # All files present
+}
+
 # Function to discover available copes from pre-group analysis results
 get_available_copes() {
     local task="$1"
@@ -46,14 +59,19 @@ get_available_copes() {
         return
     fi
     
-    # Find all cope directories
+    # Find all cope directories with required files
     local copes=""
     for item in "$task_dir"/cope*; do
         if [[ -d "$item" ]]; then
-            # Extract cope number from directory name (e.g., cope1 -> 1)
-            local cope_num=$(basename "$item" | sed 's/cope//')
-            if [[ "$cope_num" =~ ^[0-9]+$ ]]; then
-                copes="$copes $cope_num"
+            # Validate that required files exist
+            if validate_cope_directory "$item"; then
+                # Extract cope number from directory name (e.g., cope1 -> 1)
+                local cope_num=$(basename "$item" | sed 's/cope//')
+                if [[ "$cope_num" =~ ^[0-9]+$ ]]; then
+                    copes="$copes $cope_num"
+                fi
+            else
+                echo "Warning: Cope directory $item is missing required files, skipping" >&2
             fi
         fi
     done
@@ -75,7 +93,7 @@ CONTAINER_PATH="/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level
 DATA_SOURCE_CONFIGS=(
     "standard:whole_brain:run_group_voxelWise.py"
     "placebo:whole_brain/Placebo:run_group_voxelWise.py"
-    "guess:whole_brain:run_group_voxelWise.py"
+    "guess:whole_brain/Guess:run_group_voxelWise.py"
 )
 
 # =============================================================================
@@ -259,9 +277,11 @@ if [[ -z "$SCRIPT_DIR" ]]; then
     SCRIPT_DIR="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/groupLevel/${SCRIPT_SUBDIR}"
 fi
 
-# Create script directory
+# Create script directory and logs subdirectory
 mkdir -p "$SCRIPT_DIR"
+mkdir -p "$SCRIPT_DIR/logs"
 echo "Creating SLURM scripts in: $SCRIPT_DIR"
+echo "Creating logs directory in: $SCRIPT_DIR/logs"
 
 # Generate SLURM scripts
 SCRIPT_COUNT=0
@@ -299,7 +319,7 @@ for task in "${TASKS[@]}"; do
 #SBATCH --error=${err_path}
 
 module load apptainer
-apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_level_workflows.py:/app/group_level_workflows.py ${CONTAINER_PATH} \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_level_workflows.py:/app/group_level_workflows.py -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/run_group_voxelWise.py:/app/run_group_voxelWise.py ${CONTAINER_PATH} \\
     python3 /app/${SCRIPT_NAME} \\
     --task ${task} \\
     --contrast ${contrast} \\
