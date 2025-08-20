@@ -120,16 +120,20 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         logger.info(f"Analysis type: {analysis_type}")
         logger.info(f"Data source: {data_source_config['description']}")
         
-        # Create workflow
-        wf = wf_func(output_dir=paths['result_dir'], name=wf_name)
+        # Create workflow with proper directory alignment
+        # IMPORTANT: Set output_dir to workflow_dir so DataSink writes to writable location
+        # We'll copy results to final results directory after completion
+        wf = wf_func(output_dir=paths['workflow_dir'], name=wf_name)
         wf.base_dir = paths['workflow_dir']
+        
+        # The DataSink will now write to the workflow directory (which is writable)
+        # After completion, we'll copy results to the final results directory
         
         # Set common inputs
         wf.inputs.inputnode.cope_file = paths['cope_file']
         wf.inputs.inputnode.mask_file = paths['mask_file']
         wf.inputs.inputnode.design_file = paths['design_file']
         wf.inputs.inputnode.con_file = paths['con_file']
-        wf.inputs.inputnode.result_dir = paths['result_dir']
         
         # Set FLAMEO-specific inputs if needed
         if analysis_type == 'flameo':
@@ -137,26 +141,84 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 wf.inputs.inputnode.var_cope_file = paths['varcope_file']
                 logger.info("Set varcope file for FLAMEO analysis")
             else:
-                logger.warning("Varcope file not found but required for FLAMEO analysis")
+                logger.error("Varcope file not found but required for FLAMEO analysis")
+                raise ValueError("Varcope file required for FLAMEO analysis")
             
             if data_source_config['requires_grp'] and 'grp_file' in paths:
                 wf.inputs.inputnode.grp_file = paths['grp_file']
                 logger.info("Set group file for FLAMEO analysis")
             else:
-                logger.warning("Group file not found but required for FLAMEO analysis")
+                logger.error("Group file not found but required for FLAMEO analysis")
+                raise ValueError("Group file required for FLAMEO analysis")
         
         # Create directories
         Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
         Path(paths['workflow_dir']).mkdir(parents=True, exist_ok=True)
+        
+        # Verify directories are writable
+        try:
+            test_file = os.path.join(paths['result_dir'], 'test_write.tmp')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger.info(f"Results directory is writable: {paths['result_dir']}")
+        except Exception as e:
+            logger.error(f"Results directory is not writable: {paths['result_dir']} - {e}")
+            raise
+            
+        try:
+            test_file = os.path.join(paths['workflow_dir'], 'test_write.tmp')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+            logger.info(f"Workflow directory is writable: {paths['workflow_dir']}")
+        except Exception as e:
+            logger.error(f"Workflow directory is not writable: {paths['workflow_dir']} - {e}")
+            raise
         
         logger.info(f"Running workflow: {wf_name}")
         logger.info(f"Results directory: {paths['result_dir']}")
         logger.info(f"Workflow directory: {paths['workflow_dir']}")
         
         # Run the workflow
+        logger.info(f"Starting workflow execution with plugin settings: {PLUGIN_SETTINGS}")
         wf.run(**PLUGIN_SETTINGS)
         
         logger.info(f"Workflow completed successfully: {wf_name}")
+        
+        # Copy results from workflow directory to final results directory
+        workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
+        if os.path.exists(workflow_output_dir):
+            logger.info(f"Copying results from workflow directory: {workflow_output_dir}")
+            logger.info(f"To final results directory: {paths['result_dir']}")
+            
+            # Create final results directory if it doesn't exist
+            Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
+            
+            # Copy all files from workflow output to final results
+            import shutil
+            try:
+                if os.path.exists(paths['result_dir']):
+                    # Remove existing results directory contents
+                    shutil.rmtree(paths['result_dir'])
+                
+                # Copy entire workflow output directory
+                shutil.copytree(workflow_output_dir, paths['result_dir'])
+                logger.info(f"Successfully copied results to: {paths['result_dir']}")
+                
+                # List final results
+                if os.path.exists(paths['result_dir']):
+                    result_files = os.listdir(paths['result_dir'])
+                    logger.info(f"Final results directory contains: {result_files}")
+                else:
+                    logger.warning(f"Final results directory does not exist after copy")
+                    
+            except Exception as e:
+                logger.error(f"Failed to copy results: {e}")
+                raise
+        else:
+            logger.warning(f"Workflow output directory not found: {workflow_output_dir}")
+            logger.info(f"Checking workflow directory contents: {os.listdir(paths['workflow_dir'])}")
         
     except Exception as e:
         logger.error(f"Failed to run workflow {wf_name}: {e}")
@@ -185,18 +247,19 @@ def get_standard_paths(task, contrast, base_dir, data_source):
     # Use TemplateFlow to get group mask path
     group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
     
-    # Define paths
-    result_dir = os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'whole_brain')
-    workflow_dir = os.path.join(workflows_dir, f'task-{task}', f'cope{contrast}', 'whole_brain')
+    # Define paths - whole_brain moved right after groupLevel
+    result_dir = os.path.join(results_dir, 'whole_brain', f'task-{task}', f'cope{contrast}')
+    workflow_dir = os.path.join(workflows_dir, 'whole_brain', f'task-{task}', f'cope{contrast}')
     
     paths = {
         'result_dir': result_dir,
         'workflow_dir': workflow_dir,
-        'cope_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'merged_cope.nii.gz'),
-        'varcope_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'merged_varcope.nii.gz'),
-        'design_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'design.mat'),
-        'con_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'contrast.con'),
-        'grp_file': os.path.join(results_dir, f'task-{task}', f'cope{contrast}', 'design_files', 'design.grp'),
+        # Pre-group results are still in old structure: groupLevel/task-phaseX/copeY/
+        'cope_file': os.path.join(base_dir, data_source_config['results_subdir'], f'task-{task}', f'cope{contrast}', 'merged_cope.nii.gz'),
+        'varcope_file': os.path.join(base_dir, data_source_config['results_subdir'], f'task-{task}', f'cope{contrast}', 'merged_varcope.nii.gz'),
+        'design_file': os.path.join(base_dir, data_source_config['results_subdir'], f'task-{task}', f'cope{contrast}', 'design_files', 'design.mat'),
+        'con_file': os.path.join(base_dir, data_source_config['results_subdir'], f'task-{task}', f'cope{contrast}', 'design_files', 'contrast.con'),
+        'grp_file': os.path.join(base_dir, data_source_config['results_subdir'], f'task-{task}', f'cope{contrast}', 'design_files', 'design.grp'),
         'mask_file': group_mask
     }
     
@@ -218,9 +281,9 @@ def get_custom_paths(task, contrast, base_dir, custom_paths_dict):
     # Use TemplateFlow to get group mask path
     group_mask = str(tpl_get('MNI152NLin2009cAsym', resolution=2, desc='brain', suffix='mask'))
     
-    # Set default paths if not provided
-    default_result_dir = os.path.join(base_dir, f'task-{task}', f'cope{contrast}', 'whole_brain')
-    default_workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows', 'groupLevel', f'task-{task}', f'cope{contrast}', 'whole_brain')
+    # Set default paths if not provided - whole_brain moved right after groupLevel
+    default_result_dir = os.path.join(base_dir, 'whole_brain', f'task-{task}', f'cope{contrast}')
+    default_workflow_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, 'work_flows', 'groupLevel', 'whole_brain', f'task-{task}', f'cope{contrast}')
     
     paths = {
         'result_dir': custom_paths_dict.get('result_dir', default_result_dir),

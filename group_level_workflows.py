@@ -57,7 +57,7 @@ def wf_data_prepare(output_dir, contrast, name="wf_data_prepare"):
     rename_varcopes.inputs.file_type = 'varcope'
 
     # DataSink
-    datasink = Node(DataSink(base_directory=output_dir), name="datasink")
+    datasink = Node(DataSink(base_directory=output_dir, parameterization=False), name="datasink")
 
     # Workflow connections
     wf.connect([
@@ -199,7 +199,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
     wf = Workflow(name=name, base_dir=output_dir)
 
     inputnode = Node(IdentityInterface(fields=['cope_file', 'var_cope_file', 'mask_file',
-                                               'design_file', 'grp_file', 'con_file', 'result_dir']),
+                                               'design_file', 'grp_file', 'con_file']),
                      name='inputnode')
 
     flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')  # flame1 for mixed effects
@@ -259,14 +259,14 @@ def wf_flameo(output_dir, name="wf_flameo"):
 def wf_randomise(output_dir, name="wf_randomise"):
     """Workflow for group-level analysis with Randomise and TFCE."""
     wf = Workflow(name=name, base_dir=output_dir)
-    inputnode = Node(IdentityInterface(fields=['cope_file', 'mask_file', 'design_file', 'con_file', 'result_dir']),
+    inputnode = Node(IdentityInterface(fields=['cope_file', 'mask_file', 'design_file', 'con_file']),
                      name='inputnode')
     randomise = Node(Randomise(num_perm=5000,  # Number of permutations
                                tfce=True),      # Use TFCE
                      name='randomise')
     outputnode = Node(IdentityInterface(fields=['tstat_files', 'tfce_corr_p_files']),
                       name='outputnode')
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+    datasink = Node(DataSink(base_directory=output_dir, parameterization=False), name='datasink')
     # Workflow connections
     wf.connect([
         # Inputs to Randomise
@@ -528,6 +528,8 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
     Create design.mat, design.grp, and contrast.con for fMRI group-level analysis.
     
     This function is now generic and can handle any combination of columns in group_info.
+    For 2x2 factorial designs, it creates 6 complete contrasts covering all main effects
+    and interactions in both directions.
     
     Args:
         group_info (pandas.DataFrame or list): DataFrame where each column represents a condition/factor,
@@ -699,7 +701,7 @@ def create_single_factor_design(group_info, factor_levels, column_names):
     return design_matrix, contrasts
 
 def create_two_factor_design(group_info, factor_levels, column_names, contrast_type):
-    """Create design matrix for two-factor design."""
+    """Create design matrix for two-factor design with complete factorial contrasts."""
     factor_names = list(factor_levels.keys())
     levels1 = factor_levels[factor_names[0]]
     levels2 = factor_levels[factor_names[1]]
@@ -720,32 +722,60 @@ def create_two_factor_design(group_info, factor_levels, column_names, contrast_t
     # Create contrasts
     contrasts = []
     if contrast_type in ['auto', 'main_effects', 'interactions']:
-        # Main effects
-        for i in range(n_levels1):
-            for j in range(i+1, n_levels1):
-                contrast = [0] * n_cells
-                for k in range(n_levels2):
-                    idx1 = i * n_levels2 + k
-                    idx2 = j * n_levels2 + k
-                    contrast[idx1] = 1
-                    contrast[idx2] = -1
-                contrasts.append(contrast)
-        
-        for i in range(n_levels2):
-            for j in range(i+1, n_levels2):
-                contrast = [0] * n_cells
-                for k in range(n_levels1):
-                    idx1 = k * n_levels2 + i
-                    idx2 = k * n_levels2 + j
-                    contrast[idx1] = 1
-                    contrast[idx2] = -1
-                contrasts.append(contrast)
-        
-        if contrast_type in ['auto', 'interactions']:
-            # Interaction effects (simplified)
-            if n_levels1 == 2 and n_levels2 == 2:
-                contrast = [1, -1, -1, 1]  # Interaction
-                contrasts.append(contrast)
+        # For 2x2 factorial design, create complete set of 6 contrasts
+        if n_levels1 == 2 and n_levels2 == 2:
+            # Contrast 1: Factor1 Level1 > Factor1 Level2
+            contrast1 = [1, 1, -1, -1]  # (Cell 0+1) vs (Cell 2+3)
+            contrasts.append(contrast1)
+            
+            # Contrast 2: Factor1 Level1 < Factor1 Level2 (reverse of Contrast 1)
+            contrast2 = [-1, -1, 1, 1]  # (Cell 2+3) vs (Cell 0+1)
+            contrasts.append(contrast2)
+            
+            # Contrast 3: Factor2 Level1 > Factor2 Level2
+            contrast3 = [1, -1, 1, -1]  # (Cell 0+2) vs (Cell 1+3)
+            contrasts.append(contrast3)
+            
+            # Contrast 4: Factor2 Level1 < Factor2 Level2 (reverse of Contrast 3)
+            contrast4 = [-1, 1, -1, 1]  # (Cell 1+3) vs (Cell 0+2)
+            contrasts.append(contrast4)
+            
+            # Contrast 5: Interaction
+            contrast5 = [1, -1, -1, 1]  # (Cell 0) - (Cell 1) - (Cell 2) + (Cell 3)
+            contrasts.append(contrast5)
+            
+            # Contrast 6: Opposite interaction (reverse of Contrast 5)
+            contrast6 = [-1, 1, 1, -1]  # -(Cell 0) + (Cell 1) + (Cell 2) - (Cell 3)
+            contrasts.append(contrast6)
+            
+        else:
+            # For non-2x2 designs, use the original logic
+            # Main effects
+            for i in range(n_levels1):
+                for j in range(i+1, n_levels1):
+                    contrast = [0] * n_cells
+                    for k in range(n_levels2):
+                        idx1 = i * n_levels2 + k
+                        idx2 = j * n_levels2 + k
+                        contrast[idx1] = 1
+                        contrast[idx2] = -1
+                    contrasts.append(contrast)
+            
+            for i in range(n_levels2):
+                for j in range(i+1, n_levels2):
+                    contrast = [0] * n_cells
+                    for k in range(n_levels1):
+                        idx1 = k * n_levels2 + i
+                        idx2 = k * n_levels2 + j
+                        contrast[idx1] = 1
+                        contrast[idx2] = -1
+                    contrasts.append(contrast)
+            
+            if contrast_type in ['auto', 'interactions']:
+                # Interaction effects (simplified)
+                if n_levels1 == 2 and n_levels2 == 2:
+                    contrast = [1, -1, -1, 1]  # Interaction
+                    contrasts.append(contrast)
     
     return design_matrix, contrasts
 
