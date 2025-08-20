@@ -690,18 +690,21 @@ Examples:
         
         # Set up directories based on data source
         if args.output_dir:
-            results_dir = args.output_dir
+            # Use provided output_dir as base, but still add data source components
+            base_results_dir = args.output_dir
+            logger.info(f"Using custom output directory as base: {base_results_dir}")
         else:
             # Standard base: groupLevel/whole_brain
             base_results_dir = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis/groupLevel/whole_brain')
-            
-            # Add data source subdirectory if not 'standard'
-            if args.data_source and args.data_source != 'standard':
-                results_dir = os.path.join(base_results_dir, args.data_source.capitalize())
-                logger.info(f"Using data source specific results directory: {results_dir}")
-            else:
-                results_dir = base_results_dir
-                logger.info(f"Using standard results directory: {results_dir}")
+            logger.info(f"Using default base directory: {base_results_dir}")
+        
+        # Always add data source components to the base directory
+        if args.data_source and args.data_source != 'standard':
+            results_dir = os.path.join(base_results_dir, 'whole_brain', args.data_source.capitalize())
+            logger.info(f"Using data source specific results directory: {results_dir}")
+        else:
+            results_dir = os.path.join(base_results_dir, 'whole_brain')
+            logger.info(f"Using standard results directory: {results_dir}")
         
         if args.workflow_dir:
             workflow_dir = args.workflow_dir
