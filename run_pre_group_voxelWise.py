@@ -171,34 +171,63 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
         # Load drug order data with automatic separator detection
         from utils import read_csv_with_detection
         df_drug = read_csv_with_detection(DRUG_FILE)
+        logger.info(f"Loaded drug data: {len(df_drug)} subjects, columns: {list(df_drug.columns)}")
+        
         df_drug['group'] = df_drug['subID'].apply(
             lambda x: 'Patients' if x.startswith('N1') else 'Controls'
         )
+        logger.info(f"Group mapping applied: {df_drug['group'].value_counts().to_dict()}")
         
         # Load ECR data with automatic separator detection
         df_ECR = read_csv_with_detection(ECR_FILE)
+        logger.info(f"Loaded ECR data: {len(df_ECR)} subjects, columns: {list(df_ECR.columns)}")
+        
+        # Debug: Check subID overlap
+        drug_subjects = set(df_drug['subID'])
+        ecr_subjects = set(df_ECR['subID'])
+        common_subjects = drug_subjects.intersection(ecr_subjects)
+        logger.info(f"Subject overlap: {len(common_subjects)} common subjects out of {len(drug_subjects)} drug + {len(ecr_subjects)} ECR")
         
         # Merge behavioral data
         df_behav = df_drug.merge(df_ECR, how='left', left_on='subID', right_on='subID')
+        logger.info(f"After merge: {len(df_behav)} subjects, columns: {list(df_behav.columns)}")
         
         # Apply data source filtering if specified
         if data_source and data_source != 'standard':
+            logger.info(f"Applying data source filtering for '{data_source}'")
+            logger.info(f"DataFrame before filtering: {len(df_behav)} subjects, columns: {list(df_behav.columns)}")
+            
             drug_column = None
-            if 'drug_condition' in df_behav.columns:
-                drug_column = 'drug_condition'
-            elif 'Drug' in df_behav.columns:
+            # Prioritize the Drug column (string values) over drug_condition (numeric values)
+            if 'Drug' in df_behav.columns:
                 drug_column = 'Drug'
+                logger.info(f"Using 'Drug' column for filtering (contains string values)")
+            elif 'drug_condition' in df_behav.columns:
+                drug_column = 'drug_condition'
+                logger.info(f"Using 'drug_condition' column for filtering (contains numeric values)")
+            else:
+                logger.warning(f"Neither 'Drug' nor 'drug_condition' column found. Available columns: {list(df_behav.columns)}")
             
             if drug_column:
+                logger.info(f"Drug column '{drug_column}' values: {df_behav[drug_column].value_counts().to_dict()}")
+                
                 if data_source == 'placebo':
                     # Filter for placebo subjects only
-                    df_behav = df_behav[df_behav[drug_column] == 'Placebo']
+                    if drug_column == 'Drug':
+                        # Drug column contains string values like 'Placebo', 'Oxytocin'
+                        df_behav = df_behav[df_behav[drug_column] == 'Placebo']
+                    elif drug_column == 'drug_condition':
+                        # drug_condition column contains numeric values like 0, 1
+                        # Assuming 0 = Placebo, 1 = Active (based on your data)
+                        df_behav = df_behav[df_behav[drug_column] == 0]
+                        logger.info(f"Filtering drug_condition == 0 (Placebo)")
+                    
                     logger.info(f"Filtered by data source '{data_source}': {len(df_behav)} subjects remaining")
                     
                     # Check if we have enough subjects after filtering
                     if len(df_behav) == 0:
-                        logger.warning(f"No subjects found after filtering for '{data_source}'. "
-                                     f"Available drug conditions: {df_behav[drug_column].unique()}")
+                        logger.warning(f"No subjects found after filtering for '{data_source}'.")
+                        logger.warning(f"Available drug conditions: {df_behav[drug_column].unique()}")
                         logger.warning(f"Consider using --data-source standard instead")
                         
                 elif data_source == 'guess':
