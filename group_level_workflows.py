@@ -222,7 +222,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
     outputnode = Node(IdentityInterface(fields=['zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks']),
                       name='outputnode')
 
-    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
+    datasink = Node(DataSink(base_directory=output_dir, parameterization=False), name='datasink')
 
     wf.connect([
         # Inputs to FLAMEO

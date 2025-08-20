@@ -212,15 +212,48 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         
         # Run the workflow
         logger.info(f"Starting workflow execution with plugin settings: {PLUGIN_SETTINGS}")
-        wf.run(**PLUGIN_SETTINGS)
+        result = wf.run(**PLUGIN_SETTINGS)
         
         logger.info(f"Workflow completed successfully: {wf_name}")
+        logger.info(f"Workflow result: {result}")
+        
+        # Check if workflow actually completed by looking at the result
+        if result is None:
+            logger.warning("Workflow result is None - this might indicate an issue")
+        else:
+            logger.info(f"Workflow nodes completed: {list(result.keys()) if hasattr(result, 'keys') else 'No keys'}")
         
         # Copy results from workflow directory to final results directory
         workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
         if os.path.exists(workflow_output_dir):
             logger.info(f"Copying results from workflow directory: {workflow_output_dir}")
             logger.info(f"To final results directory: {paths['result_dir']}")
+            
+            # List what's in the workflow output directory before copying
+            workflow_contents = os.listdir(workflow_output_dir)
+            logger.info(f"Workflow output directory contains: {workflow_contents}")
+            
+            # Check for specific clustering results
+            if 'cluster_results' in workflow_contents:
+                cluster_dir = os.path.join(workflow_output_dir, 'cluster_results')
+                if os.path.exists(cluster_dir):
+                    cluster_files = os.listdir(cluster_dir)
+                    logger.info(f"Cluster results directory contains: {cluster_files}")
+                else:
+                    logger.warning("Cluster results directory not found")
+            else:
+                logger.warning("No cluster_results directory found in workflow output")
+            
+            # Check for stats directory
+            if 'stats' in workflow_contents:
+                stats_dir = os.path.join(workflow_output_dir, 'stats')
+                if os.path.exists(stats_dir):
+                    stats_files = os.listdir(stats_dir)
+                    logger.info(f"Stats directory contains: {stats_files}")
+                else:
+                    logger.warning("Stats directory not found")
+            else:
+                logger.warning("No stats directory found in workflow output")
             
             # Create final results directory if it doesn't exist
             Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
