@@ -237,11 +237,15 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
         logger.info(f"Looking for workflow output in: {workflow_output_dir}")
         
+        # Check what's in the main workflow directory (where actual results are)
+        workflow_dir_contents = os.listdir(paths['workflow_dir'])
+        logger.info(f"Main workflow directory contains: {workflow_dir_contents}")
+        
         if os.path.exists(workflow_output_dir):
-            logger.info(f"Copying results from workflow directory: {workflow_output_dir}")
+            logger.info(f"Copying results from workflow directory: {paths['workflow_dir']}")
             logger.info(f"To final results directory: {paths['result_dir']}")
             
-            # List what's in the workflow output directory before copying
+            # List what's in the workflow output directory for reference
             workflow_contents = os.listdir(workflow_output_dir)
             logger.info(f"Workflow output directory contains: {workflow_contents}")
             
@@ -277,19 +281,19 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             # Create final results directory if it doesn't exist
             Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
             
-            # Copy all files from workflow output to final results
+            # Copy all files from workflow directory to final results
             import shutil
             try:
-                logger.info(f"About to copy from {workflow_output_dir} to {paths['result_dir']}")
+                logger.info(f"About to copy from {paths['workflow_dir']} to {paths['result_dir']}")
                 
                 if os.path.exists(paths['result_dir']):
                     logger.info(f"Removing existing results directory: {paths['result_dir']}")
                     # Remove existing results directory contents
                     shutil.rmtree(paths['result_dir'])
                 
-                # Copy entire workflow output directory
-                logger.info(f"Executing: shutil.copytree({workflow_output_dir}, {paths['result_dir']})")
-                shutil.copytree(workflow_output_dir, paths['result_dir'])
+                # Copy entire workflow directory (where actual results are)
+                logger.info(f"Executing: shutil.copytree({paths['workflow_dir']}, {paths['result_dir']})")
+                shutil.copytree(paths['workflow_dir'], paths['result_dir'])
                 logger.info(f"Successfully copied results to: {paths['result_dir']}")
                 
                 # List final results
