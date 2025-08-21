@@ -814,6 +814,16 @@ Examples:
                         processing_columns.append(col)
                 logger.info(f"Processing with columns: {processing_columns}")
             
+            # SIMPLE FIX: If gender_id is requested, filter out gender_id==3 before creating group_info
+            if args.include_columns and 'gender_id' in args.include_columns:
+                logger.info("Filtering out gender_id==3 (Trans subjects) to prevent matrix singularity")
+                before_count = len(task_group_info_df)
+                task_group_info_df = task_group_info_df[task_group_info_df['gender_code'] != 3].copy()
+                after_count = len(task_group_info_df)
+                if before_count != after_count:
+                    logger.info(f"EXCLUDED {before_count - after_count} Trans subjects (gender_code=3) from group_info")
+                    logger.info(f"Subjects remaining: {after_count}")
+            
             group_info = list(task_group_info_df[processing_columns].itertuples(index=False, name=None))
             expected_subjects = len(group_info)
             

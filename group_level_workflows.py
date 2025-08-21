@@ -585,21 +585,8 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
             else:
                 column_names = all_columns
         
-        # === SAFETY CHECK: Ensure no Trans subjects (gender_id == 3 or gender_code == 3) are included ===
-        # This prevents matrix singularity in factorial designs
-        gender_column = None
-        if 'gender_id' in group_info.columns:
-            gender_column = 'gender_id'
-        elif 'gender_code' in group_info.columns:
-            gender_column = 'gender_code'
-        
-        if gender_column:
-            before_count = len(group_info)
-            group_info = group_info[group_info[gender_column] != 3].copy()
-            after_count = len(group_info)
-            if before_count != after_count:
-                print(f"WARNING: Excluded {before_count - after_count} Trans subjects ({gender_column}=3) from design matrix to prevent singularity")
-                print(f"Subjects remaining: {after_count}")
+        # Trans subjects (gender_id==3) are already filtered out in run_pre_group_voxelWise.py
+        # No need for additional safety checks here
     else:
         # Input is a list of tuples, convert to DataFrame
         import pandas as pd
@@ -617,21 +604,8 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         # Convert list of tuples to DataFrame
         group_info = pd.DataFrame(group_info, columns=column_names)
     
-    # === SAFETY CHECK: Ensure no Trans subjects (gender_id == 3 or gender_code == 3) are included ===
-    # This prevents matrix singularity in factorial designs
-    gender_column = None
-    if 'gender_id' in group_info.columns:
-        gender_column = 'gender_id'
-    elif 'gender_code' in group_info.columns:
-        gender_column = 'gender_code'
-    
-    if gender_column:
-        before_count = len(group_info)
-        group_info = group_info[group_info[gender_column] != 3].copy()
-        after_count = len(group_info)
-        if before_count != after_count:
-            print(f"WARNING: Excluded {before_count - after_count} Trans subjects ({gender_column}=3) from design matrix to prevent singularity")
-            print(f"Subjects remaining: {after_count}")
+    # Trans subjects (gender_id==3) are already filtered out in run_pre_group_voxelWise.py
+    # No need for additional safety checks here
     
     # Extract factor columns (exclude 'subID' if present)
     factor_columns = [col for col in column_names if col != 'subID']
