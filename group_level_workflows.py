@@ -199,7 +199,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
     wf = Workflow(name=name, base_dir=output_dir)
 
     inputnode = Node(IdentityInterface(fields=['cope_file', 'var_cope_file', 'mask_file',
-                                               'design_file', 'grp_file', 'con_file']),
+                                               'design_file', 'grp_file', 'con_file', 'result_dir']),
                      name='inputnode')
 
     flameo = Node(FLAMEO(run_mode='flame1'), name='flameo')  # flame1 for mixed effects
@@ -222,7 +222,7 @@ def wf_flameo(output_dir, name="wf_flameo"):
     outputnode = Node(IdentityInterface(fields=['zstats', 'cluster_thresh', 'cluster_index', 'cluster_peaks']),
                       name='outputnode')
 
-    datasink = Node(DataSink(base_directory=output_dir, parameterization=False), name='datasink')
+    datasink = Node(DataSink(base_directory=output_dir), name='datasink')
 
     wf.connect([
         # Inputs to FLAMEO
@@ -250,9 +250,9 @@ def wf_flameo(output_dir, name="wf_flameo"):
 
         # Outputs to DataSink
         (outputnode, datasink, [('zstats', 'stats.@zstats'),
-                                ('cluster_thresh', 'cluster_results.threshold_file'),
-                                ('cluster_index', 'cluster_results.index_file'),
-                                ('cluster_peaks', 'cluster_results.localmax_txt_file')])
+                                ('cluster_thresh', 'cluster_results.@thresh'),
+                                ('cluster_index', 'cluster_results.@index'),
+                                ('cluster_peaks', 'cluster_results.@peaks')])
     ])
     return wf
 
