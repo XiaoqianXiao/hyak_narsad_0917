@@ -238,6 +238,17 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
             else:
                 logger.warning(f"Drug column not found, cannot filter by data source '{data_source}'")
         
+        # EXCLUDE Trans subjects (gender_code == 3) from all analyses to prevent matrix singularity
+        if 'gender_code' in df_behav.columns:
+            before_count = len(df_behav)
+            df_behav = df_behav[df_behav['gender_code'] != 3].copy()
+            after_count = len(df_behav)
+            if before_count != after_count:
+                logger.info(f"EXCLUDED {before_count - after_count} Trans subjects (gender_code=3) from analysis to prevent matrix singularity")
+                logger.info(f"Subjects remaining: {after_count}")
+        else:
+            logger.warning("No gender_code column found - cannot exclude Trans subjects")
+        
         # Apply additional filtering if specified
         if filter_column and filter_value:
             if filter_column not in df_behav.columns:
@@ -551,7 +562,7 @@ def main():
     """Main execution function."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(
-        description="Pre-group level fMRI analysis pipeline for NARSAD project. Creates merged COPE/VARCOPE files and design matrices for group-level analysis. Supports 2x2 and 2x2x2 factorial designs.",
+        description="Pre-group level fMRI analysis pipeline for NARSAD project. Creates merged COPE/VARCOPE files and design matrices for group-level analysis. Supports 2x2 and 2x2x2 factorial designs. Trans subjects (gender_code=3) are automatically excluded to prevent matrix singularity.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -573,7 +584,7 @@ Examples:
   # Placebo-only analysis with 2x2 design
   python run_pre_group_voxelWise.py --data-source placebo --phase phase2 --include-columns "subID,group_id,drug_id"
   
-  # Placebo-only analysis with 2x2x2 design
+  # Placebo-only analysis with 2x2x2 design (Trans subjects automatically excluded)
   python run_pre_group_voxelWise.py --data-source placebo --phase phase2 --include-columns "subID,group_id,drug_id,gender_id"
   
   # Guess condition analysis
@@ -608,7 +619,10 @@ Examples:
     parser.add_argument(
         '--include-columns',
         type=str,
-        help='Comma-separated list of columns to include in group_info (default: auto-detect)'
+        help='Comma-separated list of columns to include in group_info (default: auto-detect). '
+             'Available columns: subID, group_id, drug_id, gender_id, guess_id. '
+             'Note: gender_id maps to gender_code column in data. '
+             'Trans subjects (gender_code=3) are automatically excluded to prevent matrix singularity.'
     )
     
     parser.add_argument(

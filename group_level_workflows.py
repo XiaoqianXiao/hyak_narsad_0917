@@ -584,6 +584,16 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
                 column_names = [col for col in all_columns if col != 'subject']
             else:
                 column_names = all_columns
+        
+        # === SAFETY CHECK: Ensure no Trans subjects (gender_id == 3) are included ===
+        # This prevents matrix singularity in factorial designs
+        if 'gender_id' in group_info.columns:
+            before_count = len(group_info)
+            group_info = group_info[group_info['gender_id'] != 3].copy()
+            after_count = len(group_info)
+            if before_count != after_count:
+                print(f"WARNING: Excluded {before_count - after_count} Trans subjects (gender_id=3) from design matrix to prevent singularity")
+                print(f"Subjects remaining: {after_count}")
     else:
         # Input is a list of tuples, convert to DataFrame
         import pandas as pd
@@ -600,6 +610,16 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         
         # Convert list of tuples to DataFrame
         group_info = pd.DataFrame(group_info, columns=column_names)
+    
+    # === SAFETY CHECK: Ensure no Trans subjects (gender_id == 3) are included ===
+    # This prevents matrix singularity in factorial designs
+    if 'gender_id' in group_info.columns:
+        before_count = len(group_info)
+        group_info = group_info[group_info['gender_id'] != 3].copy()
+        after_count = len(group_info)
+        if before_count != after_count:
+            print(f"WARNING: Excluded {before_count - after_count} Trans subjects (gender_id=3) from design matrix to prevent singularity")
+            print(f"Subjects remaining: {after_count}")
     
     # Extract factor columns (exclude 'subID' if present)
     factor_columns = [col for col in column_names if col != 'subID']
