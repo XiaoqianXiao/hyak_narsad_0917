@@ -245,16 +245,16 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             workflow_contents = os.listdir(workflow_output_dir)
             logger.info(f"Workflow output directory contains: {workflow_contents}")
             
-                    # Check for stats directory (FLAMEO outputs)
-        if 'stats' in workflow_contents:
-            stats_dir = os.path.join(workflow_output_dir, 'stats')
-            if os.path.exists(stats_dir):
-                stats_files = os.listdir(stats_dir)
-                logger.info(f"Stats directory contains: {stats_files}")
+            # Check for specific clustering results
+            if 'cluster_results' in workflow_contents:
+                cluster_dir = os.path.join(workflow_output_dir, 'cluster_results')
+                if os.path.exists(cluster_dir):
+                    cluster_files = os.listdir(cluster_dir)
+                    logger.info(f"Cluster results directory contains: {cluster_files}")
+                else:
+                    logger.warning("Cluster results directory not found")
             else:
-                logger.warning("Stats directory not found")
-        else:
-            logger.warning("No stats directory found in workflow output")
+                logger.warning("No cluster_results directory found in workflow output")
             
             # Check for stats directory
             if 'stats' in workflow_contents:
