@@ -625,11 +625,13 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
     factor_columns = [col for col in column_names if col != 'subID']
     n_factors = len(factor_columns)
     
-    # Get unique levels for each factor
+    # Get unique levels for each factor FROM THE FILTERED DATA
+    # This ensures we don't include levels that were filtered out (like gender_id=3)
     factor_levels = {}
     for factor_name in factor_columns:
         factor_values = group_info[factor_name].values
         factor_levels[factor_name] = sorted(set(factor_values))
+        print(f"Factor '{factor_name}' levels: {factor_levels[factor_name]} (from filtered data)")
     
     # Create design matrix - self-contained version
     if n_factors == 1:
@@ -674,6 +676,9 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         n_levels1 = len(factor_levels[factor1_name])
         n_levels2 = len(factor_levels[factor2_name])
         
+        print(f"Creating 2-factor design matrix: {n_levels1} × {n_levels2} = {n_levels1 * n_levels2} columns")
+        print(f"Expected design matrix shape: {len(group_info)} subjects × {n_levels1 * n_levels2} columns")
+        
         # Create design matrix using cell-means coding
         design_matrix = []
         for _, row in group_info.iterrows():
@@ -691,6 +696,12 @@ def create_dummy_design_files(group_info, output_dir, column_names=None, contras
         
         # Create contrasts for 2x2 factorial design
         contrasts = []
+        if n_levels1 == 2 and n_levels2 == 2:
+            print(f"Creating 6 contrasts for 2×2 factorial design (4 columns)")
+        else:
+            print(f"WARNING: Non-2×2 design detected: {n_levels1} × {n_levels2} = {n_levels1 * n_levels2} columns")
+            print("This may cause matrix singularity issues!")
+        
         if n_levels1 == 2 and n_levels2 == 2:
             # Contrast 1: Factor1 Level1 > Factor1 Level2
             contrast1 = [1, 1, -1, -1]  # (Cell 0+1) vs (Cell 2+3)
