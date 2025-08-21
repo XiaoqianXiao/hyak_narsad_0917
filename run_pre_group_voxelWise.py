@@ -803,9 +803,15 @@ Examples:
                     'group_id': 'group_id',      # Keep group_id as is
                     'subID': 'subID'             # Keep subID as is
                 }
-                # Map output column names back to data column names
-                reverse_mapping = {v: k for k, v in column_mapping.items()}
-                processing_columns = [reverse_mapping.get(col, col) for col in final_include_columns]
+                # Map output column names back to data column names for processing
+                processing_columns = []
+                for col in final_include_columns:
+                    if col in column_mapping:
+                        # Use the actual column name in the data
+                        processing_columns.append(column_mapping[col])
+                    else:
+                        # Keep the column name as is
+                        processing_columns.append(col)
                 logger.info(f"Processing with columns: {processing_columns}")
             
             group_info = list(task_group_info_df[processing_columns].itertuples(index=False, name=None))
