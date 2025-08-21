@@ -294,6 +294,9 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
                 'subID': 'subID'             # Keep subID as is
             }
             
+            # Create reverse mapping for the final output
+            reverse_mapping = {v: k for k, v in column_mapping.items()}
+            
             # Map requested columns to actual column names
             mapped_columns = []
             missing_columns = []
@@ -312,8 +315,9 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
                                f"Available columns: {list(df_behav.columns)}. "
                                f"Note: gender_id maps to gender_code")
             
-            # Use mapped columns
-            include_columns = mapped_columns
+            # Use mapped columns for data processing, but keep original names for output
+            data_columns = mapped_columns
+            output_columns = include_columns  # Keep original column names for output
         else:
             # Default columns: always include subID and group_id, add others if available
             include_columns = ['subID', 'group_id']
@@ -324,9 +328,14 @@ def load_behavioral_data(filter_column=None, filter_value=None, include_columns=
         
         logger.info(f"Loaded behavioral data for {len(df_behav)} subjects")
         logger.info(f"Groups: {group_levels.tolist()}")
-        logger.info(f"Columns to include: {include_columns}")
         
-        return df_behav, include_columns
+        if include_columns:
+            logger.info(f"Data processing columns: {data_columns}")
+            logger.info(f"Output columns: {output_columns}")
+        else:
+            logger.info(f"Default columns: {include_columns}")
+        
+        return df_behav, output_columns if include_columns else include_columns
         
     except Exception as e:
         logger.error(f"Failed to load behavioral data: {e}")
@@ -784,7 +793,22 @@ Examples:
                     logger.warning(f"Subject {args.subject} not found in task {task}, skipping")
                     continue
             
-            group_info = list(task_group_info_df[final_include_columns].itertuples(index=False, name=None))
+            # Use the correct column names for data processing
+            processing_columns = final_include_columns
+            if args.include_columns:
+                # If include_columns was specified, we need to map back to the actual column names in the data
+                column_mapping = {
+                    'gender_id': 'gender_code',  # Map gender_id to gender_code
+                    'drug_id': 'drug_id',        # Keep drug_id as is
+                    'group_id': 'group_id',      # Keep group_id as is
+                    'subID': 'subID'             # Keep subID as is
+                }
+                # Map output column names back to data column names
+                reverse_mapping = {v: k for k, v in column_mapping.items()}
+                processing_columns = [reverse_mapping.get(col, col) for col in final_include_columns]
+                logger.info(f"Processing with columns: {processing_columns}")
+            
+            group_info = list(task_group_info_df[processing_columns].itertuples(index=False, name=None))
             expected_subjects = len(group_info)
             
             if expected_subjects == 0:
