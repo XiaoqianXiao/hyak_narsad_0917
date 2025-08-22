@@ -233,7 +233,7 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         else:
             logger.info(f"Workflow nodes completed: {list(result.keys()) if hasattr(result, 'keys') else 'No keys'}")
         
-        # Copy results from workflow directory to final results directory
+         # Copy results from workflow directory to final results directory
         workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
         logger.info(f"Looking for workflow output in: {workflow_output_dir}")
         
@@ -249,77 +249,65 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             workflow_contents = os.listdir(workflow_output_dir)
             logger.info(f"Workflow output directory contains: {workflow_contents}")
             
-            # Check for specific clustering results
-            if 'cluster_results' in workflow_contents:
-                cluster_dir = os.path.join(workflow_output_dir, 'cluster_results')
-                if os.path.exists(cluster_dir):
-                    cluster_files = os.listdir(cluster_dir)
-                    logger.info(f"Cluster results directory contains: {cluster_files}")
-                else:
-                    logger.warning("Cluster results directory not found")
-            else:
-                logger.warning("No cluster_results directory found in workflow output")
+            # Simplified check for required result directories
+            logger.info(f"Checking for required result directories in {workflow_output_dir}")
             
-            # Check for stats directory
-            if 'stats' in workflow_contents:
-                stats_dir = os.path.join(workflow_output_dir, 'stats')
-                if os.path.exists(stats_dir):
-                    stats_files = os.listdir(stats_dir)
-                    logger.info(f"Stats directory contains: {stats_files}")
-                else:
-                    logger.warning("Stats directory not found")
-            else:
-                logger.warning("No stats directory found in workflow output")
+            # Check if required subdirectories exist (search recursively)
+            result_subdirs = ['stats', 'cluster_results', 'randomise']
+            found_dirs = {}
             
-            # Check for any other subdirectories that might contain results
-            for item in workflow_contents:
-                item_path = os.path.join(workflow_output_dir, item)
-                if os.path.isdir(item_path):
-                    subdir_contents = os.listdir(item_path)
-                    logger.info(f"Subdirectory '{item}' contains: {subdir_contents}")
+            def find_subdir_recursive(base_dir, target_dir):
+                """Recursively search for a subdirectory in the base directory."""
+                for root, dirs, files in os.walk(base_dir):
+                    if target_dir in dirs:
+                        return os.path.join(root, target_dir)
+                return None
+            
+            for subdir in result_subdirs:
+                source_path = find_subdir_recursive(workflow_output_dir, subdir)
+                if source_path:
+                    found_dirs[subdir] = source_path
+                    logger.info(f"Found {subdir} directory at: {source_path}")
+                else:
+                    logger.info(f"Subdirectory {subdir} not found, will skip")
             
             # Create final results directory if it doesn't exist
             Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
             
-            # Copy all files from workflow directory to final results
+            # Copy only specific result subdirectories from workflow to final results
             import shutil
             try:
-                logger.info(f"About to copy from {paths['workflow_dir']} to {paths['result_dir']}")
+                logger.info(f"About to copy specific result directories from {workflow_output_dir} to {paths['result_dir']}")
                 
-                if os.path.exists(paths['result_dir']):
-                    logger.info(f"Removing existing results directory: {paths['result_dir']}")
-                    # Remove existing results directory contents
-                    shutil.rmtree(paths['result_dir'])
+                # Define which subdirectories to copy (only the actual results)
+                result_subdirs = ['stats', 'cluster_results', 'randomise']
                 
-                # Copy entire workflow directory (where actual results are)
-                logger.info(f"Executing: shutil.copytree({paths['workflow_dir']}, {paths['result_dir']})")
-                shutil.copytree(paths['workflow_dir'], paths['result_dir'])
-                logger.info(f"Successfully copied results to: {paths['result_dir']}")
+                # Copy each result subdirectory if it was found
+                for subdir in result_subdirs:
+                    if subdir in found_dirs:
+                        source_path = found_dirs[subdir]
+                        dest_path = os.path.join(paths['result_dir'], subdir)
+                        
+                        try:
+                            # Use copy2 for cross-device safety (like pre-group analysis)
+                            if os.path.exists(dest_path):
+                                shutil.rmtree(dest_path)  # Remove existing directory
+                            shutil.copytree(source_path, dest_path)
+                            logger.info(f"Successfully copied {subdir} from {source_path} to {dest_path}")
+                        except Exception as e:
+                            logger.error(f"Failed to copy {subdir}: {e}")
+                            raise
+                    else:
+                        logger.info(f"Subdirectory {subdir} not found, skipping")
                 
-                # List final results
+                logger.info(f"Successfully copied all result directories to: {paths['result_dir']}")
+                
+                # Verify final results directory
                 if os.path.exists(paths['result_dir']):
                     result_files = os.listdir(paths['result_dir'])
                     logger.info(f"Final results directory contains: {result_files}")
-                    
-                    # Check if clustering results made it to the final directory
-                    final_cluster_dir = os.path.join(paths['result_dir'], 'cluster_results')
-                    if os.path.exists(final_cluster_dir):
-                        final_cluster_files = os.listdir(final_cluster_dir)
-                        logger.info(f"Final cluster_results directory contains: {final_cluster_files}")
-                    else:
-                        logger.warning("Final cluster_results directory not found after copy")
                 else:
                     logger.warning(f"Final results directory does not exist after copy")
-                    
-            except Exception as e:
-                logger.error(f"Failed to copy results: {e}")
-                logger.error(f"Exception type: {type(e)}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                raise
-        else:
-            logger.warning(f"Workflow output directory not found: {workflow_output_dir}")
-            logger.info(f"Checking workflow directory contents: {os.listdir(paths['workflow_dir'])}")
         
     except Exception as e:
         logger.error(f"Failed to run workflow {wf_name}: {e}")
