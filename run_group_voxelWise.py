@@ -308,6 +308,9 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                     logger.info(f"Final results directory contains: {result_files}")
                 else:
                     logger.warning(f"Final results directory does not exist after copy")
+            except Exception as e:
+                logger.error(f"Failed to copy result directories: {e}")
+                raise
         
     except Exception as e:
         logger.error(f"Failed to run workflow {wf_name}: {e}")
