@@ -91,8 +91,8 @@ logger = logging.getLogger(__name__)
 
 # Default SLURM parameters
 DEFAULT_SLURM_PARAMS = {
-    #'partition': 'ckpt-all',
-    'partition': 'cpu-g2',
+    'partition': 'ckpt-all',
+    #'partition': 'cpu-g2',
     'account': 'fang',
     'time': '04:00:00',
     'mem': '32G',
