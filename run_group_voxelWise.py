@@ -269,16 +269,25 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 for dir_name in dirs:
                     logger.info(f"  Found directory: {os.path.join(root, dir_name)}")
             
+            # Debug: List all directories found in the main workflow directory
+            logger.info(f"All directories found in main workflow directory:")
+            for root, dirs, files in os.walk(paths['workflow_dir']):
+                for dir_name in dirs:
+                    logger.info(f"  Found directory: {os.path.join(root, dir_name)}")
+            
             # First, search for all required subdirectories in BOTH locations
             # 1. Main workflow directory (where cluster_results and stats typically exist)
             # 2. Nested workflow output directory (where some results might be nested)
             for subdir in result_subdirs:
+                logger.info(f"Searching for {subdir} directory...")
+                
                 # First try main workflow directory
                 source_path = find_subdir_recursive(paths['workflow_dir'], subdir)
                 if source_path:
                     found_dirs[subdir] = source_path
                     logger.info(f"Found {subdir} directory at: {source_path} (in main workflow directory)")
                 else:
+                    logger.info(f"{subdir} not found in main workflow directory, checking nested workflow output...")
                     # If not found in main directory, try nested workflow output directory
                     source_path = find_subdir_recursive(workflow_output_dir, subdir)
                     if source_path:
@@ -308,12 +317,14 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
             import shutil
             try:
                 logger.info(f"About to copy specific result directories from {workflow_output_dir} to {paths['result_dir']}")
+                logger.info(f"Found directories: {list(found_dirs.keys())}")
                 
                 # Define which subdirectories to copy (only the actual results)
                 # Note: FLAMEO creates 'stats' and 'cluster_results', Randomise creates 'randomise'
                 result_subdirs = ['stats', 'cluster_results', 'randomise']
                 
                 # Copy each result subdirectory if it was found
+                copied_count = 0
                 for subdir in result_subdirs:
                     if subdir in found_dirs:
                         source_path = found_dirs[subdir]
@@ -325,13 +336,14 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                                 shutil.rmtree(dest_path)  # Remove existing directory
                             shutil.copytree(source_path, dest_path)
                             logger.info(f"Successfully copied {subdir} from {source_path} to {dest_path}")
+                            copied_count += 1
                         except Exception as e:
                             logger.error(f"Failed to copy {subdir}: {e}")
                             raise
                     else:
                         logger.info(f"Subdirectory {subdir} not found, skipping")
                 
-                logger.info(f"Successfully copied all result directories to: {paths['result_dir']}")
+                logger.info(f"Successfully copied {copied_count} result directories to: {paths['result_dir']}")
                 
                 # Verify final results directory
                 if os.path.exists(paths['result_dir']):
