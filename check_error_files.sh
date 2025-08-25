@@ -11,6 +11,15 @@ for file in *.err; do
     fi
 done
 
+for file in *flameo*.err; do
+    if [[ -f "$file" ]]; then
+        last_line=$(tail -n 1 "$file" 2>/dev/null)
+        if [[ "$last_line" != *"analysis pipeline completed successfully"* ]]; then
+            echo "$file"
+        fi
+    fi
+done
+
 for file in *.err; do
     if [[ -f "$file" ]]; then
         last_line=$(tail -n 1 "$file" 2>/dev/null)

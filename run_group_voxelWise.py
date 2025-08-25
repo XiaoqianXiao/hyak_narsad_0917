@@ -233,7 +233,7 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
         else:
             logger.info(f"Workflow nodes completed: {list(result.keys()) if hasattr(result, 'keys') else 'No keys'}")
         
-         # Copy results from workflow directory to final results directory
+        # Copy results from workflow directory to final results directory
         workflow_output_dir = os.path.join(paths['workflow_dir'], wf_name)
         logger.info(f"Looking for workflow output in: {workflow_output_dir}")
         
@@ -263,13 +263,43 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                         return os.path.join(root, target_dir)
                 return None
             
+            # Debug: List all directories found in the workflow output
+            logger.info(f"All directories found in workflow output:")
+            for root, dirs, files in os.walk(workflow_output_dir):
+                for dir_name in dirs:
+                    logger.info(f"  Found directory: {os.path.join(root, dir_name)}")
+            
+            # First, search for all required subdirectories in BOTH locations
+            # 1. Main workflow directory (where cluster_results and stats typically exist)
+            # 2. Nested workflow output directory (where some results might be nested)
             for subdir in result_subdirs:
-                source_path = find_subdir_recursive(workflow_output_dir, subdir)
+                # First try main workflow directory
+                source_path = find_subdir_recursive(paths['workflow_dir'], subdir)
                 if source_path:
                     found_dirs[subdir] = source_path
-                    logger.info(f"Found {subdir} directory at: {source_path}")
+                    logger.info(f"Found {subdir} directory at: {source_path} (in main workflow directory)")
                 else:
-                    logger.info(f"Subdirectory {subdir} not found, will skip")
+                    # If not found in main directory, try nested workflow output directory
+                    source_path = find_subdir_recursive(workflow_output_dir, subdir)
+                    if source_path:
+                        found_dirs[subdir] = source_path
+                        logger.info(f"Found {subdir} directory at: {source_path} (in nested workflow directory)")
+                    else:
+                        logger.info(f"Subdirectory {subdir} not found in either location, will skip")
+            
+            # Special handling for cluster_results - look in common FLAMEO locations if not found
+            if 'cluster_results' not in found_dirs:
+                logger.info("cluster_results not found at top level, checking common FLAMEO locations...")
+                # Look for cluster_results in common FLAMEO subdirectories
+                common_locations = ['clustering', 'flameo', 'datasink']
+                for loc in common_locations:
+                    loc_path = os.path.join(workflow_output_dir, loc)
+                    if os.path.exists(loc_path):
+                        cluster_in_loc = find_subdir_recursive(loc_path, 'cluster_results')
+                        if cluster_in_loc:
+                            found_dirs['cluster_results'] = cluster_in_loc
+                            logger.info(f"Found cluster_results in {loc} subdirectory: {cluster_in_loc}")
+                            break
             
             # Create final results directory if it doesn't exist
             Path(paths['result_dir']).mkdir(parents=True, exist_ok=True)
@@ -280,6 +310,7 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                 logger.info(f"About to copy specific result directories from {workflow_output_dir} to {paths['result_dir']}")
                 
                 # Define which subdirectories to copy (only the actual results)
+                # Note: FLAMEO creates 'stats' and 'cluster_results', Randomise creates 'randomise'
                 result_subdirs = ['stats', 'cluster_results', 'randomise']
                 
                 # Copy each result subdirectory if it was found
@@ -308,9 +339,16 @@ def run_group_level_workflow(task, contrast, analysis_type, paths, data_source_c
                     logger.info(f"Final results directory contains: {result_files}")
                 else:
                     logger.warning(f"Final results directory does not exist after copy")
+                    
             except Exception as e:
-                logger.error(f"Failed to copy result directories: {e}")
+                logger.error(f"Failed to copy results: {e}")
+                logger.error(f"Exception type: {type(e)}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 raise
+        else:
+            logger.warning(f"Workflow output directory not found: {workflow_output_dir}")
+            logger.info(f"Checking workflow directory contents: {os.listdir(paths['workflow_dir'])}")
         
     except Exception as e:
         logger.error(f"Failed to run workflow {wf_name}: {e}")
