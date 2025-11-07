@@ -23,7 +23,7 @@
 # =============================================================================
 
 # Base directory for LSS scripts
-SCRIPTS_BASE_DIR="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/LSS"
+SCRIPTS_BASE_DIR="/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss"
 
 # Default settings
 PHASE=""
