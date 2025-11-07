@@ -144,7 +144,7 @@ module load apptainer
 
 # Run LSS analysis using the container
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {CONTAINER_PATH} \\
-    python3 /app/run_LSS.py \\
+    python3 /app/run_1st_LSS.py \\
     --subject {subject} \\
     --task {task} \\
     --trial {trial_ID}
