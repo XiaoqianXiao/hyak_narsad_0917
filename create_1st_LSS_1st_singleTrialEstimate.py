@@ -103,7 +103,7 @@ OUTPUT_DIR = os.path.join(DERIVATIVES_DIR, 'fMRI_analysis', 'LSS')
 
 # Container and workflow paths
 SCRUBBED_DIR = '/scrubbed_dir'
-CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
+CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad.sif"
 
 # BIDS configuration
 SPACE = ['MNI152NLin2009cAsym']
