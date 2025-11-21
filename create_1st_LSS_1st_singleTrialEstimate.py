@@ -136,8 +136,8 @@ def create_slurm_script(subject, task, trial_ID, work_dir, slurm_config):
 #SBATCH --cpus-per-task={slurm_config['cpus_per_task']}
 #SBATCH --mem={slurm_config['memory']}
 #SBATCH --time={slurm_config['time']}
-#SBATCH --output={work_dir}/sub_{subject}_trial_{trial_ID}_%j.out
-#SBATCH --error={work_dir}/sub_{subject}_trial_{trial_ID}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/{task}/sub_{subject}_trial_{trial_ID}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/{task}/sub_{subject}_trial_{trial_ID}_%j.err
 
 # Load required modules
 module load apptainer
