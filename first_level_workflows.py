@@ -506,9 +506,9 @@ def first_level_wf_LSS(in_files, output_dir, trial_ID, condition_names=None, con
             condition_names = ['trial', 'others']
         
         if contrast_type == 'custom' and contrast_patterns:
-            contrasts, cs_condition, other_conditions = create_custom_contrasts(condition_names, contrast_patterns)
+            contrasts, _, _, _ = create_custom_contrasts(condition_names, contrast_patterns)
         else:
-            contrasts, cs_condition, other_conditions = create_contrasts(condition_names, contrast_type=contrast_type)
+            contrasts, _, _, _ = create_contrasts(condition_names, contrast_type=contrast_type)
     
     if not contrasts:
         logger.warning("No contrasts generated for LSS workflow")
