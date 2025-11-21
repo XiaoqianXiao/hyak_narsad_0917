@@ -143,7 +143,7 @@ def create_slurm_script(subject, task, trial_ID, work_dir, slurm_config):
 module load apptainer
 
 # Run LSS analysis using the container
-apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {CONTAINER_PATH} \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad_0917:/app {CONTAINER_PATH} \\
     python3 /app/run_1st_LSS.py \\
     --subject {subject} \\
     --task {task} \\
