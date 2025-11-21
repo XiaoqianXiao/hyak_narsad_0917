@@ -137,14 +137,14 @@ def create_slurm_script(subject, task, work_dir, slurm_config, contrasts=None):
 #SBATCH --cpus-per-task={slurm_config['cpus_per_task']}
 #SBATCH --mem={slurm_config['memory']}
 #SBATCH --time={slurm_config['time']}
-#SBATCH --output={work_dir}/sub_{subject}_%j.out
-#SBATCH --error={work_dir}/sub_{subject}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/LSS_1st_2nd/{task}/sub_{subject}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/LSS_1st_2nd/{task}/sub_{subject}_%j.err
 
 # Load required modules
 module load apptainer
 
 # Run LSS trial merging using the container
-apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir {CONTAINER_PATH} \\
+apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad_0917:/app {CONTAINER_PATH} \\
     python3 /app/first_LSS_2_cateAlltrials.py \\
     --subject {subject} \\
     --task {task}{contrast_args}

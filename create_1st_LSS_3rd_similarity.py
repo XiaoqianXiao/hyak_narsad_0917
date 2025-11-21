@@ -98,7 +98,7 @@ RESULTS_DIR = os.path.join(LSS_DIR, 'all_subjects')
 
 # Scrubbed directory and container
 SCRUBBED_DIR = '/scrubbed_dir'
-CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif"
+CONTAINER_PATH = "/gscratch/scrubbed/fanglab/xiaoqian/images/narsad.sif"
 
 # Atlas and ROI paths
 COMBINED_ATLAS_PATH = ('/scrubbed_dir/parcellation/Tian/3T/'
@@ -226,15 +226,14 @@ def create_slurm_script(sub, task, work_dir, mask_img_path, combined_atlas_path,
 #SBATCH --cpus-per-task={slurm_config['cpus_per_task']}                                                                                        
 #SBATCH --mem={slurm_config['memory']}                                                                                                 
 #SBATCH --time={slurm_config['time']}                                                                                           
-#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.out
-#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/Lss_step3/{task}_sub_{sub}_{analysis_type}_%j.err
 
 module load apptainer
 apptainer exec \\
     -B /gscratch/fang:/data \\
     -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir \\
-    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/first_LSS_3rd_similarity.py:/app/first_LSS_3rd_similarity.py \\
-    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/similarity.py:/app/similarity.py \\
+    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad_0917:/app \\
     {CONTAINER_PATH} \\
     python3 /app/first_LSS_3rd_similarity.py \\
     --subject {sub} \\

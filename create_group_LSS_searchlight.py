@@ -87,8 +87,8 @@ def generate_slurm_scripts(method, work_dir, slurm_dir, container_path, script_p
 #SBATCH --account=fang                                                                                            
 #SBATCH --partition={partition}
 #SBATCH --job-name=group_LSS_searchlight_{{map_type}}_{{task}}_{{method}}
-#SBATCH --output={work_dir}/{{task}}_group_LSS_searchlight_{{map_type}}_{{method}}_%j.out
-#SBATCH --error={work_dir}/{{task}}_group_LSS_searchlight_{{map_type}}_{{method}}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/group_searchlight/{{task}}_group_LSS_searchlight_{{map_type}}_{{method}}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/group_searchlight/{{task}}_group_LSS_searchlight_{{map_type}}_{{method}}_%j.err
 #SBATCH --time={{time}}
 #SBATCH --mem={{mem}}
 #SBATCH --cpus-per-task={{cpus}}
@@ -109,9 +109,7 @@ mkdir -p {work_dir}
 apptainer exec \\
     -B /gscratch/fang:/data \\
     -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir \\
-    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_LSS_searchlight.py:/app/group_LSS_searchlight.py \\
-    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_level_workflows.py:/app/group_level_workflows.py \\
-    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/utils.py:/app/utils.py \\
+    -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad_0917:/app \\
     {container_path} python3 /app/group_LSS_searchlight.py --map_type {{map_type}} --method {{method}}
 
 echo "Job completed: $(date)"
@@ -161,7 +159,7 @@ def main():
     
     # Paths
     parser.add_argument('--container-path', 
-                       default='/gscratch/scrubbed/fanglab/xiaoqian/images/narsad-fmri_1st_level_1.0.sif',
+                       default='/gscratch/scrubbed/fanglab/xiaoqian/images/narsad.sif',
                        help='Path to the container image')
     parser.add_argument('--script-path', 
                        default='/gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad/group_LSS_searchlight.py',
