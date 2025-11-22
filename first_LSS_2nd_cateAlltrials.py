@@ -114,94 +114,87 @@ SPACE = 'MNI152NLin2009cAsym'
 def discover_lss_outputs(layout, subject, task, contrast=1, trial_range=None):
     """
     Discover LSS output files for a specific subject-task combination.
-    
-    Args:
-        layout: BIDS layout object
-        subject (str): Subject ID
-        task (str): Task name
-        contrast (int): Contrast number (default: 1)
-        trial_range (tuple): Optional tuple of (start, end) trial numbers to filter
-    
-    Returns:
-        list: List of file paths sorted by trial number
     """
     # Query for LSS trial outputs
+    # NOTE: we do NOT use 'desc' here because some pybids configs don't define it
     query = {
         'extension': ['.nii', '.nii.gz'],
-        'desc': r'trial.*',
         'suffix': 'bold',
         'subject': subject,
         'task': task,
-        'space': SPACE
+        'space': SPACE,
     }
-    
+
     # Get all matching files
     all_files = layout.get(**query, regex_search=True)
-    
+
     if not all_files:
-        print(f"    No trial files found for subject {subject}, task {task}")
+        print(f"    No bold files found for subject {subject}, task {task}")
         return []
-    
-    # Filter for specific contrast if specified
-    contrast_pattern = f'_cope{contrast}'
-    filtered_files = [f for f in all_files if contrast_pattern in f.filename]
-    
-    if not filtered_files:
-        print(f"    Warning: No files found with contrast {contrast}")
+
+    # ---- contrast filter ----
+    # Your filenames look like:
+    #   sub-N101_ses-pilot3mm_task-phase3_space-MNI..._desc-trial9_varcope2_bold.nii
+    #
+    # If you want VARCOPE images, use '_varcope{contrast}'
+    # If you want COPE images, use '_cope{contrast}' and make sure those files exist.
+    contrast_pattern = f'_varcope{contrast}'  # <-- change to '_cope{contrast}' if needed
+
+    contrast_files = [f for f in all_files if contrast_pattern in f.filename]
+
+    if not contrast_files:
+        print(f"    Warning: No files found with contrast {contrast} (pattern '{contrast_pattern}')")
         return []
-    
-    # Sort files by trial number
+
+    # ---- keep only trial images based on filename ----
     def extract_trial_num(file_obj):
-        """Extract trial number from filename."""
         filename = file_obj.filename if hasattr(file_obj, 'filename') else str(file_obj)
-        
-        # Try multiple patterns for trial number extraction
+
         patterns = [
-            r'desc-trial(\d+)',  # BIDS standard
-            r'trial(\d+)',       # Alternative pattern
-            r'_trial(\d+)',      # Underscore prefix
-            r'trial_(\d+)'       # Underscore suffix
+            r'desc-trial(\d+)',  # BIDS-style
+            r'trial(\d+)',
+            r'_trial(\d+)',
+            r'trial_(\d+)',
         ]
-        
+
         for pattern in patterns:
-            match = re.search(pattern, filename)
-            if match:
-                return int(match.group(1))
-        
-        # Fallback: try to extract from path
+            m = re.search(pattern, filename)
+            if m:
+                return int(m.group(1))
+
+        # fall back to path
         path_str = str(file_obj.path)
         for pattern in patterns:
-            match = re.search(pattern, path_str)
-            if match:
-                return int(match.group(1))
-        
-        # Last resort: return infinity for sorting
+            m = re.search(pattern, path_str)
+            if m:
+                return int(m.group(1))
+
         print(f"      Warning: Could not extract trial number from {filename}")
         return float('inf')
-    
-    sorted_files = sorted(filtered_files, key=extract_trial_num)
-    
-    # Filter out files with invalid trial numbers
+
+    # sort by trial number
+    sorted_files = sorted(contrast_files, key=extract_trial_num)
     valid_files = [f for f in sorted_files if extract_trial_num(f) != float('inf')]
-    
+
     if len(valid_files) != len(sorted_files):
         print(f"    Warning: {len(sorted_files) - len(valid_files)} files had invalid trial numbers")
-    
-    # Apply trial range filter if specified
+
+    # optional trial range
     if trial_range:
         start_trial, end_trial = trial_range
-        range_filtered_files = []
+        range_filtered = []
         for f in valid_files:
-            trial_num = extract_trial_num(f)
-            if start_trial <= trial_num <= end_trial:
-                range_filtered_files.append(f)
-        
+            t = extract_trial_num(f)
+            if start_trial <= t <= end_trial:
+                range_filtered.append(f)
+
         print(f"    Trial range filter: {start_trial} to {end_trial}")
-        print(f"    Available trials: {len(valid_files)}, Filtered trials: {len(range_filtered_files)}")
-        valid_files = range_filtered_files
-    
+        print(f"    Available trials: {len(valid_files)}, Filtered trials: {len(range_filtered)}")
+        valid_files = range_filtered
+
     print(f"    Found {len(valid_files)} valid trial files for contrast {contrast}")
     return valid_files
+
 
 def validate_and_prepare_data(files):
     """
