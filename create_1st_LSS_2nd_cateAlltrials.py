@@ -137,15 +137,15 @@ def create_slurm_script(subject, task, work_dir, slurm_config, contrasts=None):
 #SBATCH --cpus-per-task={slurm_config['cpus_per_task']}
 #SBATCH --mem={slurm_config['memory']}
 #SBATCH --time={slurm_config['time']}
-#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/LSS_1st_2nd/{task}/sub_{subject}_%j.out
-#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss/logs/LSS_1st_2nd/{task}/sub_{subject}_%j.err
+#SBATCH --output=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/LSS_step2/logs/{task}/sub_{subject}_%j.out
+#SBATCH --error=/gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/LSS_step2/logs/{task}/sub_{subject}_%j.err
 
 # Load required modules
 module load apptainer
 
 # Run LSS trial merging using the container
 apptainer exec -B /gscratch/fang:/data -B /gscratch/scrubbed/fanglab/xiaoqian:/scrubbed_dir -B /gscratch/scrubbed/fanglab/xiaoqian/repo/hyak_narsad_0917:/app {CONTAINER_PATH} \\
-    python3 /app/first_LSS_2_cateAlltrials.py \\
+    python3 /app/first_LSS_2nd_cateAlltrials.py \\
     --subject {subject} \\
     --task {task}{contrast_args}
 
@@ -482,7 +482,7 @@ Examples:
         print()
         print("Scripts are located in:")
         for task in tasks_to_process:
-            work_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, f'work_flows/Lss_step2/{task}')
+            work_dir = os.path.join(SCRUBBED_DIR, PROJECT_NAME, f'work_flows/LSS_step2//{task}')
             print(f"  {task}: {work_dir}")
     
     if processing_errors:
@@ -506,7 +506,7 @@ Examples:
     print("    - Launcher: launch_group_LSS.sh")
     print("")
     print("To submit all jobs, you can use:")
-    print("  for script in /gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/Lss_step2/*/*.sh; do sbatch \"$script\"; done")
+    print("  for script in /gscratch/scrubbed/fanglab/xiaoqian/NARSAD/work_flows/LSS_step2//*/*.sh; do sbatch \"$script\"; done")
     print("")
     print("Or use the launch script:")
     print("  ./launch_1st_LSS_2nd_cateAlltrials.sh")
